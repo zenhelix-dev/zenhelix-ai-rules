@@ -1,6 +1,6 @@
 ---
 root: true
-targets: ["*"]
+targets: [ "claudecode" ]
 description: "Project overview and general development guidelines"
 globs: ["**/*"]
 ---
@@ -9,23 +9,17 @@ globs: ["**/*"]
 
 ## General Guidelines
 
-- Use TypeScript for all new code
-- Follow consistent naming conventions
+- Follow consistent naming conventions across all languages
 - Write self-documenting code with clear variable and function names
 - Prefer composition over inheritance
 - Use meaningful comments for complex business logic
-
-## Code Style
-
-- Use 2 spaces for indentation
-- Use semicolons
-- Use double quotes for strings
-- Use trailing commas in multi-line objects and arrays
+- Primary stack: Kotlin/Java (JVM ecosystem), but principles apply to any language
 
 ## Architecture Principles
 
-- Organize code by feature, not by file type
+- Organize code by feature/domain, not by file type
 - Keep related files close together
 - Use dependency injection for better testability
-- Implement proper error handling
+- Implement proper error handling at every layer
 - Follow single responsibility principle
+- Prefer immutability and pure functions where possible

@@ -1,6 +1,6 @@
 ---
 description: 'Review a pull request'
-targets: ["*"]
+targets: ["claudecode"]
 ---
 
 target_pr = $ARGUMENTS

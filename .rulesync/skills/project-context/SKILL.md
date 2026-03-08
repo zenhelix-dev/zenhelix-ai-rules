@@ -1,7 +1,7 @@
 ---
 name: project-context
 description: "Summarize the project context and key constraints"
-targets: ["*"]
+targets: ["claudecode"]
 ---
 
 Summarize the project goals, core constraints, and relevant dependencies.
