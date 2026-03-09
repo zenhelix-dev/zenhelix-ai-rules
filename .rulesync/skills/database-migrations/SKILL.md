@@ -2,6 +2,9 @@
 name: database-migrations
 description: "Database migration best practices for schema changes, data migrations, rollbacks, and zero-downtime deployments across PostgreSQL, MySQL, and JVM tools (Flyway, Liquibase, JPA/Hibernate)."
 targets: ["claudecode"]
+claudecode:
+  model: opus
+  allowed-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 ---
 
 # Database Migration Patterns

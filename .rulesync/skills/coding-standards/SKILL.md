@@ -2,6 +2,9 @@
 name: coding-standards
 description: "Universal coding standards, best practices, and patterns for Kotlin and Java development."
 targets: ["claudecode"]
+claudecode:
+  model: sonnet
+  allowed-tools: ["Read", "Grep", "Glob"]
 ---
 
 # Coding Standards & Best Practices

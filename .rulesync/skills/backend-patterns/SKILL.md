@@ -2,6 +2,9 @@
 name: backend-patterns
 description: "Backend architecture patterns, API design, database optimization, and server-side best practices for Spring Boot with Kotlin and Java."
 targets: ["claudecode"]
+claudecode:
+  model: sonnet
+  allowed-tools: ["Read", "Grep", "Glob"]
 ---
 
 # Backend Development Patterns

@@ -2,6 +2,9 @@
 name: postgres-patterns
 description: "PostgreSQL database patterns for query optimization, schema design, indexing, and security. Based on Supabase best practices."
 targets: ["claudecode"]
+claudecode:
+  model: haiku
+  allowed-tools: ["Read", "Grep", "Glob"]
 ---
 
 # PostgreSQL Patterns

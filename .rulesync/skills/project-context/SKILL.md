@@ -2,6 +2,9 @@
 name: project-context
 description: "Summarize the project context and key constraints"
 targets: ["claudecode"]
+claudecode:
+  model: haiku
+  allowed-tools: ["Read", "Grep", "Glob", "Bash"]
 ---
 
 Summarize the project goals, core constraints, and relevant dependencies.
