@@ -130,11 +130,13 @@ All 3 attempts must pass. Used for critical paths where consistency matters. Tar
 ```bash
 # Run eval N times, collect results
 PASS_COUNT=0
+FIRST_RESULT="FAIL"
 TOTAL=3
 for i in $(seq 1 $TOTAL); do
   # Replace eval_passes with actual evaluation command (e.g., ./gradlew test)
   if eval_passes; then
     PASS_COUNT=$((PASS_COUNT + 1))
+    [[ $i -eq 1 ]] && FIRST_RESULT="PASS"
   fi
 done
 

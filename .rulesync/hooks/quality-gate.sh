@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-INPUT=$(cat)
+INPUT=$(cat 2>/dev/null || true)
 
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 if [[ -z "$FILE_PATH" ]]; then

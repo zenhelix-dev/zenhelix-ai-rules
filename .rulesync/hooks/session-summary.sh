@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-INPUT=$(cat 2>/dev/null || true)
-
 {
   echo "=== Session Summary ==="
   echo ""

@@ -17,7 +17,7 @@ if mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 
 if [[ "$COUNT" -ge 50 ]] && [[ $((COUNT % 25)) -eq 0 ]]; then
-  echo "HINT: $COUNT tool calls this session. Consider /compact to free context." >&2
+  echo "HINT: $COUNT write/edit operations this session. Consider /compact to free context." >&2
 fi
 
 exit 0
