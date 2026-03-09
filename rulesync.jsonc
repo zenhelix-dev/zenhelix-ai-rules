@@ -5,6 +5,7 @@
   ],
   "features": [
     "rules",
+    "hooks",
     "ignore",
     "mcp",
     "commands",

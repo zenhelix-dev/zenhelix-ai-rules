@@ -5,7 +5,6 @@ description: >-
   Software architecture specialist for system design, scalability, and technical decision-making. Use PROACTIVELY when planning new features, refactoring large systems, or making architectural decisions.
 claudecode:
   model: opus
-  tools: ["Read", "Grep", "Glob"]
 ---
 
 You are a senior software architect specializing in scalable, maintainable system design.

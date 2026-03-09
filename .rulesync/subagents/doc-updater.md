@@ -5,7 +5,6 @@ description: >-
   Documentation and codemap specialist. Use PROACTIVELY for updating codemaps and documentation. Generates docs/CODEMAPS/*, updates READMEs and guides using Dokka (Kotlin), Javadoc, and Gradle tasks.
 claudecode:
   model: haiku
-  tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 ---
 
 # Documentation & Codemap Specialist

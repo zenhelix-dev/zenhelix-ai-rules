@@ -5,7 +5,6 @@ description: >-
   Dead code cleanup and consolidation specialist. Use PROACTIVELY for removing unused code, duplicates, and refactoring. Runs analysis tools (detekt, SpotBugs, Gradle dependency analysis, IntelliJ inspections) to identify dead code and safely removes it.
 claudecode:
   model: sonnet
-  tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 ---
 
 # Refactor & Dead Code Cleaner

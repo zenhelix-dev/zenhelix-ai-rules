@@ -5,7 +5,6 @@ description: >-
   End-to-end testing specialist using Selenium WebDriver and Testcontainers for Spring Boot applications. Use PROACTIVELY for generating, maintaining, and running E2E tests. Manages test journeys, quarantines flaky tests, captures artifacts (screenshots, logs), and ensures critical user flows work.
 claudecode:
   model: sonnet
-  tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 ---
 
 # E2E Test Runner

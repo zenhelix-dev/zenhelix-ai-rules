@@ -5,7 +5,6 @@ description: >-
   Build and Kotlin/Java compilation error resolution specialist. Use PROACTIVELY when Gradle/Maven build fails or compilation errors occur. Fixes build/compilation errors only with minimal diffs, no architectural edits. Focuses on getting the build green quickly.
 claudecode:
   model: sonnet
-  tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 ---
 
 # Build Error Resolver
