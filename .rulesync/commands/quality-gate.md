@@ -111,6 +111,12 @@ When `--fix` is specified:
 - Zero tolerance: any issue fails the gate
 - Useful for critical paths (auth, payment, security modules)
 
+## Automatic Hook
+
+The `quality-gate.sh` hook runs automatically on every Write/Edit operation (postToolUse),
+performing detekt/checkstyle/spotbugs checks on .kt/.java files. This command provides
+the full manual pipeline when deeper analysis is needed.
+
 ## Rules
 
 - Format fixes are always safe to auto-apply

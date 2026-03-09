@@ -1,15 +1,35 @@
 {
   "version": 1,
   "hooks": {
+    "preToolUse": [
+      {
+        "matcher": "Bash",
+        "command": ".rulesync/hooks/git-push-reminder.sh"
+      },
+      {
+        "matcher": "Write|Edit",
+        "command": ".rulesync/hooks/suggest-compact.sh"
+      }
+    ],
     "postToolUse": [
       {
         "matcher": "Write|Edit",
         "command": ".rulesync/hooks/format-check.sh"
+      },
+      {
+        "matcher": "Write|Edit",
+        "command": ".rulesync/hooks/quality-gate.sh"
       }
     ],
     "stop": [
       {
         "command": ".rulesync/hooks/session-summary.sh"
+      },
+      {
+        "command": ".rulesync/hooks/cost-tracker.sh"
+      },
+      {
+        "command": ".rulesync/hooks/session-state.sh"
       }
     ]
   }

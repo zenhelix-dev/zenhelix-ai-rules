@@ -107,6 +107,11 @@ Present all extracted patterns for user review before saving.
 - Skip? [s]
 ```
 
+## Related Skills
+
+- **continuous-learning** — Instinct-based learning system for persistent pattern storage with confidence scoring and lifecycle management
+- **eval-harness** — Use extracted patterns to define evals for regression testing
+
 ## Rules
 
 - NEVER save patterns with low confidence without user confirmation
