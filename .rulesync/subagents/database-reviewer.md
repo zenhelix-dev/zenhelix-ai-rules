@@ -5,7 +5,7 @@ description: >-
   PostgreSQL database specialist for query optimization, schema design, security, and performance. Use PROACTIVELY when writing SQL, creating migrations, designing schemas, or troubleshooting database performance. Incorporates Supabase best practices.
 claudecode:
   model: sonnet
-  tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+  tools: ["Read", "Bash", "Grep", "Glob"]
 ---
 
 # Database Reviewer

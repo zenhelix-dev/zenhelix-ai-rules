@@ -28,30 +28,50 @@ Display all sessions with metadata, filtering, and pagination.
 **Script:**
 
 ```bash
-node -e "
-const sm = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-manager');
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
+SESSION_DIR="${HOME}/.claude/sessions"
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
 
-const result = sm.getAllSessions({ limit: 20 });
-const aliases = aa.listAliases();
-const aliasMap = {};
-for (const a of aliases) aliasMap[a.sessionPath] = a.name;
+if [ ! -d "$SESSION_DIR" ]; then
+  echo "No sessions directory found at $SESSION_DIR"
+  exit 1
+fi
 
-console.log('Sessions (showing ' + result.sessions.length + ' of ' + result.total + '):');
-console.log('');
-console.log('ID        Date        Time     Size     Lines  Alias');
-console.log('────────────────────────────────────────────────────');
+# Build alias lookup (sessionPath -> aliasName)
+declare -A ALIAS_MAP
+if [ -f "$ALIAS_FILE" ]; then
+  while IFS='=' read -r name path; do
+    ALIAS_MAP["$path"]="$name"
+  done < <(python3 -c "
+import json, sys
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+for a in data.get('aliases', []):
+    print(a['name'] + '=' + a['sessionPath'])
+" 2>/dev/null)
+fi
 
-for (const s of result.sessions) {
-  const alias = aliasMap[s.filename] || '';
-  const size = sm.getSessionSize(s.sessionPath);
-  const stats = sm.getSessionStats(s.sessionPath);
-  const id = s.shortId === 'no-id' ? '(none)' : s.shortId.slice(0, 8);
-  const time = s.modifiedTime.toTimeString().slice(0, 5);
+TOTAL=$(find "$SESSION_DIR" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
+echo "Sessions (showing up to 20 of ${TOTAL}):"
+echo ""
+printf "%-10s %-12s %-6s %-8s %-6s %s\n" "ID" "Date" "Time" "Size" "Lines" "Alias"
+echo "────────────────────────────────────────────────────"
 
-  console.log(id.padEnd(8) + ' ' + s.date + '  ' + time + '   ' + size.padEnd(7) + '  ' + String(stats.lineCount).padEnd(5) + '  ' + alias);
-}
-"
+find "$SESSION_DIR" -maxdepth 1 -name '*.md' -print0 \
+  | xargs -0 ls -t \
+  | head -20 \
+  | while read -r filepath; do
+    filename=$(basename "$filepath")
+    # Extract short ID from filename (strip date prefix and .md suffix)
+    short_id=$(echo "$filename" | sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_//' | sed 's/\.md$//' | cut -c1-8)
+    [ -z "$short_id" ] && short_id="(none)"
+    # Extract date from filename
+    file_date=$(echo "$filename" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || stat -f '%Sm' -t '%Y-%m-%d' "$filepath")
+    file_time=$(stat -f '%Sm' -t '%H:%M' "$filepath")
+    file_size=$(du -h "$filepath" | cut -f1 | tr -d ' ')
+    line_count=$(wc -l < "$filepath" | tr -d ' ')
+    alias_name="${ALIAS_MAP[$filename]:-}"
+    printf "%-10s %-12s %-6s %-8s %-6s %s\n" "$short_id" "$file_date" "$file_time" "$file_size" "$line_count" "$alias_name"
+done
 ```
 
 ### Load Session
@@ -68,54 +88,78 @@ Load and display a session's content (by ID or alias).
 **Script:**
 
 ```bash
-node -e "
-const sm = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-manager');
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
-const id = process.argv[1];
+SESSION_DIR="${HOME}/.claude/sessions"
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
+ID="$1"
 
-// First try to resolve as alias
-const resolved = aa.resolveAlias(id);
-const sessionId = resolved ? resolved.sessionPath : id;
+if [ -z "$ID" ]; then
+  echo "Usage: /sessions load <id|alias>"
+  exit 1
+fi
 
-const session = sm.getSessionById(sessionId, true);
-if (!session) {
-  console.log('Session not found: ' + id);
-  process.exit(1);
-}
+# Try to resolve as alias first
+RESOLVED=""
+if [ -f "$ALIAS_FILE" ]; then
+  RESOLVED=$(python3 -c "
+import json, sys
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+for a in data.get('aliases', []):
+    if a['name'] == '$ID':
+        print(a['sessionPath'])
+        break
+" 2>/dev/null)
+fi
 
-const stats = sm.getSessionStats(session.sessionPath);
-const size = sm.getSessionSize(session.sessionPath);
-const aliases = aa.getAliasesForSession(session.filename);
+SESSION_ID="${RESOLVED:-$ID}"
 
-console.log('Session: ' + session.filename);
-console.log('Path: ~/.claude/sessions/' + session.filename);
-console.log('');
-console.log('Statistics:');
-console.log('  Lines: ' + stats.lineCount);
-console.log('  Total items: ' + stats.totalItems);
-console.log('  Completed: ' + stats.completedItems);
-console.log('  In progress: ' + stats.inProgressItems);
-console.log('  Size: ' + size);
-console.log('');
+# Find the session file
+FILEPATH=$(find "$SESSION_DIR" -maxdepth 1 -name "*${SESSION_ID}*" -type f | head -1)
+if [ -z "$FILEPATH" ]; then
+  echo "Session not found: $ID"
+  exit 1
+fi
 
-if (aliases.length > 0) {
-  console.log('Aliases: ' + aliases.map(a => a.name).join(', '));
-  console.log('');
-}
+FILENAME=$(basename "$FILEPATH")
+LINE_COUNT=$(wc -l < "$FILEPATH" | tr -d ' ')
+FILE_SIZE=$(du -h "$FILEPATH" | cut -f1 | tr -d ' ')
+TOTAL_ITEMS=$(grep -cE '^\s*- \[' "$FILEPATH" 2>/dev/null || echo "0")
+COMPLETED=$(grep -cE '^\s*- \[x\]' "$FILEPATH" 2>/dev/null || echo "0")
+IN_PROGRESS=$(grep -cE '^\s*- \[-\]' "$FILEPATH" 2>/dev/null || echo "0")
 
-if (session.metadata.title) {
-  console.log('Title: ' + session.metadata.title);
-  console.log('');
-}
+echo "Session: $FILENAME"
+echo "Path: ~/.claude/sessions/$FILENAME"
+echo ""
+echo "Statistics:"
+echo "  Lines: $LINE_COUNT"
+echo "  Total items: $TOTAL_ITEMS"
+echo "  Completed: $COMPLETED"
+echo "  In progress: $IN_PROGRESS"
+echo "  Size: $FILE_SIZE"
+echo ""
 
-if (session.metadata.started) {
-  console.log('Started: ' + session.metadata.started);
-}
+# Show aliases for this session
+if [ -f "$ALIAS_FILE" ]; then
+  ALIASES=$(python3 -c "
+import json
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+names = [a['name'] for a in data.get('aliases', []) if a['sessionPath'] == '$FILENAME']
+if names:
+    print(', '.join(names))
+" 2>/dev/null)
+  if [ -n "$ALIASES" ]; then
+    echo "Aliases: $ALIASES"
+    echo ""
+  fi
+fi
 
-if (session.metadata.lastUpdated) {
-  console.log('Last Updated: ' + session.metadata.lastUpdated);
-}
-" "$ARGUMENTS"
+# Extract title from frontmatter if present
+TITLE=$(sed -n '/^---$/,/^---$/{ /^title:/s/^title:\s*//p; }' "$FILEPATH")
+if [ -n "$TITLE" ]; then
+  echo "Title: $TITLE"
+  echo ""
+fi
 ```
 
 ### Create Alias
@@ -130,33 +174,42 @@ Create a memorable alias for a session.
 **Script:**
 
 ```bash
-node -e "
-const sm = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-manager');
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
+SESSION_DIR="${HOME}/.claude/sessions"
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
+SESSION_ID="$1"
+ALIAS_NAME="$2"
 
-const sessionId = process.argv[1];
-const aliasName = process.argv[2];
+if [ -z "$SESSION_ID" ] || [ -z "$ALIAS_NAME" ]; then
+  echo "Usage: /sessions alias <id> <name>"
+  exit 1
+fi
 
-if (!sessionId || !aliasName) {
-  console.log('Usage: /sessions alias <id> <name>');
-  process.exit(1);
-}
+# Find the session file
+FILEPATH=$(find "$SESSION_DIR" -maxdepth 1 -name "*${SESSION_ID}*" -type f | head -1)
+if [ -z "$FILEPATH" ]; then
+  echo "Session not found: $SESSION_ID"
+  exit 1
+fi
 
-// Get session filename
-const session = sm.getSessionById(sessionId);
-if (!session) {
-  console.log('Session not found: ' + sessionId);
-  process.exit(1);
-}
+FILENAME=$(basename "$FILEPATH")
 
-const result = aa.setAlias(aliasName, session.filename);
-if (result.success) {
-  console.log('✓ Alias created: ' + aliasName + ' → ' + session.filename);
-} else {
-  console.log('✗ Error: ' + result.error);
-  process.exit(1);
-}
-" "$ARGUMENTS"
+# Initialize alias file if it doesn't exist
+if [ ! -f "$ALIAS_FILE" ]; then
+  echo '{"aliases":[]}' > "$ALIAS_FILE"
+fi
+
+# Add alias using python3 for JSON manipulation
+python3 -c "
+import json, sys
+with open('$ALIAS_FILE', 'r') as f:
+    data = json.load(f)
+# Remove existing alias with same name
+data['aliases'] = [a for a in data.get('aliases', []) if a['name'] != '$ALIAS_NAME']
+data['aliases'].append({'name': '$ALIAS_NAME', 'sessionPath': '$FILENAME'})
+with open('$ALIAS_FILE', 'w') as f:
+    json.dump(data, f, indent=2)
+print('Alias created: $ALIAS_NAME -> $FILENAME')
+"
 ```
 
 ### Remove Alias
@@ -171,23 +224,33 @@ Delete an existing alias.
 **Script:**
 
 ```bash
-node -e "
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
+ALIAS_NAME="$1"
 
-const aliasName = process.argv[1];
-if (!aliasName) {
-  console.log('Usage: /sessions alias --remove <name>');
-  process.exit(1);
-}
+if [ -z "$ALIAS_NAME" ]; then
+  echo "Usage: /sessions alias --remove <name>"
+  exit 1
+fi
 
-const result = aa.deleteAlias(aliasName);
-if (result.success) {
-  console.log('✓ Alias removed: ' + aliasName);
-} else {
-  console.log('✗ Error: ' + result.error);
-  process.exit(1);
-}
-" "$ARGUMENTS"
+if [ ! -f "$ALIAS_FILE" ]; then
+  echo "No aliases file found."
+  exit 1
+fi
+
+python3 -c "
+import json, sys
+with open('$ALIAS_FILE', 'r') as f:
+    data = json.load(f)
+before = len(data.get('aliases', []))
+data['aliases'] = [a for a in data.get('aliases', []) if a['name'] != '$ALIAS_NAME']
+after = len(data['aliases'])
+if before == after:
+    print('Alias not found: $ALIAS_NAME')
+    sys.exit(1)
+with open('$ALIAS_FILE', 'w') as f:
+    json.dump(data, f, indent=2)
+print('Alias removed: $ALIAS_NAME')
+"
 ```
 
 ### Session Info
@@ -201,41 +264,77 @@ Show detailed information about a session.
 **Script:**
 
 ```bash
-node -e "
-const sm = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-manager');
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
+SESSION_DIR="${HOME}/.claude/sessions"
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
+ID="$1"
 
-const id = process.argv[1];
-const resolved = aa.resolveAlias(id);
-const sessionId = resolved ? resolved.sessionPath : id;
+if [ -z "$ID" ]; then
+  echo "Usage: /sessions info <id|alias>"
+  exit 1
+fi
 
-const session = sm.getSessionById(sessionId, true);
-if (!session) {
-  console.log('Session not found: ' + id);
-  process.exit(1);
-}
+# Try to resolve as alias first
+RESOLVED=""
+if [ -f "$ALIAS_FILE" ]; then
+  RESOLVED=$(python3 -c "
+import json
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+for a in data.get('aliases', []):
+    if a['name'] == '$ID':
+        print(a['sessionPath'])
+        break
+" 2>/dev/null)
+fi
 
-const stats = sm.getSessionStats(session.sessionPath);
-const size = sm.getSessionSize(session.sessionPath);
-const aliases = aa.getAliasesForSession(session.filename);
+SESSION_ID="${RESOLVED:-$ID}"
 
-console.log('Session Information');
-console.log('════════════════════');
-console.log('ID:          ' + (session.shortId === 'no-id' ? '(none)' : session.shortId));
-console.log('Filename:    ' + session.filename);
-console.log('Date:        ' + session.date);
-console.log('Modified:    ' + session.modifiedTime.toISOString().slice(0, 19).replace('T', ' '));
-console.log('');
-console.log('Content:');
-console.log('  Lines:         ' + stats.lineCount);
-console.log('  Total items:   ' + stats.totalItems);
-console.log('  Completed:     ' + stats.completedItems);
-console.log('  In progress:   ' + stats.inProgressItems);
-console.log('  Size:          ' + size);
-if (aliases.length > 0) {
-  console.log('Aliases:     ' + aliases.map(a => a.name).join(', '));
-}
-" "$ARGUMENTS"
+# Find the session file
+FILEPATH=$(find "$SESSION_DIR" -maxdepth 1 -name "*${SESSION_ID}*" -type f | head -1)
+if [ -z "$FILEPATH" ]; then
+  echo "Session not found: $ID"
+  exit 1
+fi
+
+FILENAME=$(basename "$FILEPATH")
+SHORT_ID=$(echo "$FILENAME" | sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_//' | sed 's/\.md$//' | cut -c1-8)
+[ -z "$SHORT_ID" ] && SHORT_ID="(none)"
+FILE_DATE=$(echo "$FILENAME" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || stat -f '%Sm' -t '%Y-%m-%d' "$FILEPATH")
+MODIFIED=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$FILEPATH")
+LINE_COUNT=$(wc -l < "$FILEPATH" | tr -d ' ')
+FILE_SIZE=$(du -h "$FILEPATH" | cut -f1 | tr -d ' ')
+TOTAL_ITEMS=$(grep -cE '^\s*- \[' "$FILEPATH" 2>/dev/null || echo "0")
+COMPLETED=$(grep -cE '^\s*- \[x\]' "$FILEPATH" 2>/dev/null || echo "0")
+IN_PROGRESS=$(grep -cE '^\s*- \[-\]' "$FILEPATH" 2>/dev/null || echo "0")
+
+echo "Session Information"
+echo "════════════════════"
+echo "ID:          $SHORT_ID"
+echo "Filename:    $FILENAME"
+echo "Date:        $FILE_DATE"
+echo "Modified:    $MODIFIED"
+echo ""
+echo "Content:"
+echo "  Lines:         $LINE_COUNT"
+echo "  Total items:   $TOTAL_ITEMS"
+echo "  Completed:     $COMPLETED"
+echo "  In progress:   $IN_PROGRESS"
+echo "  Size:          $FILE_SIZE"
+
+# Show aliases
+if [ -f "$ALIAS_FILE" ]; then
+  ALIASES=$(python3 -c "
+import json
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+names = [a['name'] for a in data.get('aliases', []) if a['sessionPath'] == '$FILENAME']
+if names:
+    print(', '.join(names))
+" 2>/dev/null)
+  if [ -n "$ALIASES" ]; then
+    echo "Aliases:     $ALIASES"
+  fi
+fi
 ```
 
 ### List Aliases
@@ -249,25 +348,37 @@ Show all session aliases.
 **Script:**
 
 ```bash
-node -e "
-const aa = require((process.env.CLAUDE_PLUGIN_ROOT||require('path').join(require('os').homedir(),'.claude'))+'/scripts/lib/session-aliases');
+ALIAS_FILE="${HOME}/.claude/session-aliases.json"
 
-const aliases = aa.listAliases();
-console.log('Session Aliases (' + aliases.length + '):');
-console.log('');
+if [ ! -f "$ALIAS_FILE" ]; then
+  echo "Session Aliases (0):"
+  echo ""
+  echo "No aliases found."
+  exit 0
+fi
 
-if (aliases.length === 0) {
-  console.log('No aliases found.');
-} else {
-  console.log('Name          Session File                    Title');
-  console.log('─────────────────────────────────────────────────────────────');
-  for (const a of aliases) {
-    const name = a.name.padEnd(12);
-    const file = (a.sessionPath.length > 30 ? a.sessionPath.slice(0, 27) + '...' : a.sessionPath).padEnd(30);
-    const title = a.title || '';
-    console.log(name + ' ' + file + ' ' + title);
-  }
-}
+python3 -c "
+import json
+
+with open('$ALIAS_FILE') as f:
+    data = json.load(f)
+
+aliases = data.get('aliases', [])
+print(f'Session Aliases ({len(aliases)}):')
+print()
+
+if not aliases:
+    print('No aliases found.')
+else:
+    print(f'{\"Name\":<14} {\"Session File\":<32} Title')
+    print('─' * 60)
+    for a in aliases:
+        name = a['name'][:12]
+        path = a['sessionPath']
+        if len(path) > 30:
+            path = path[:27] + '...'
+        title = a.get('title', '')
+        print(f'{name:<14} {path:<32} {title}')
 "
 ```
 

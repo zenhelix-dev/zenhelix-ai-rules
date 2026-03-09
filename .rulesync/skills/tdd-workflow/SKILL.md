@@ -14,7 +14,7 @@ This skill ensures all code development follows TDD principles with comprehensiv
 - Fixing bugs or issues
 - Refactoring existing code
 - Adding API endpoints
-- Creating new components
+- Creating new services or components
 
 ## Core Principles
 
@@ -34,23 +34,23 @@ ALWAYS write tests first, then implement code to make tests pass.
 #### Unit Tests
 
 - Individual functions and utilities
-- Component logic
+- Service layer logic
 - Pure functions
 - Helpers and utilities
 
 #### Integration Tests
 
-- API endpoints
-- Database operations
+- API endpoints (Spring MVC Test)
+- Database operations (Spring Data JPA + Testcontainers)
 - Service interactions
 - External API calls
 
-#### E2E Tests (Playwright)
+#### E2E Tests (Selenium / Testcontainers)
 
 - Critical user flows
 - Complete workflows
-- Browser automation
-- UI interactions
+- Full application stack testing
+- API contract verification
 
 ## TDD Workflow Steps
 
@@ -68,30 +68,36 @@ so that I can find relevant markets even without exact keywords.
 
 For each user journey, create comprehensive test cases:
 
-```typescript
-describe('Semantic Search', () => {
-  it('returns relevant markets for query', async () => {
-    // Test implementation
-  })
+```kotlin
+@Nested
+inner class SemanticSearch {
 
-  it('handles empty query gracefully', async () => {
-    // Test edge case
-  })
+    @Test
+    fun `returns relevant markets for query`() {
+        // Test implementation
+    }
 
-  it('falls back to substring search when Redis unavailable', async () => {
-    // Test fallback behavior
-  })
+    @Test
+    fun `handles empty query gracefully`() {
+        // Test edge case
+    }
 
-  it('sorts results by similarity score', async () => {
-    // Test sorting logic
-  })
-})
+    @Test
+    fun `falls back to substring search when Redis unavailable`() {
+        // Test fallback behavior
+    }
+
+    @Test
+    fun `sorts results by similarity score`() {
+        // Test sorting logic
+    }
+}
 ```
 
 ### Step 3: Run Tests (They Should Fail)
 
 ```bash
-npm test
+./gradlew test
 # Tests should fail - we haven't implemented yet
 ```
 
@@ -99,17 +105,17 @@ npm test
 
 Write minimal code to make tests pass:
 
-```typescript
+```kotlin
 // Implementation guided by tests
-export async function searchMarkets(query: string) {
-  // Implementation here
+suspend fun searchMarkets(query: String): List<Market> {
+    // Implementation here
 }
 ```
 
 ### Step 5: Run Tests Again
 
 ```bash
-npm test
+./gradlew test
 # Tests should now pass
 ```
 
@@ -125,187 +131,344 @@ Improve code quality while keeping tests green:
 ### Step 7: Verify Coverage
 
 ```bash
-npm run test:coverage
+./gradlew test jacocoTestReport
 # Verify 80%+ coverage achieved
 ```
 
 ## Testing Patterns
 
-### Unit Test Pattern (Jest/Vitest)
+### Unit Test Pattern (JUnit 5 + MockK)
 
-```typescript
-import { render, screen, fireEvent } from '@testing-library/react'
-import { Button } from './Button'
+```kotlin
+import io.mockk.coEvery
+import io.mockk.mockk
+import io.mockk.verify
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.Test
 
-describe('Button Component', () => {
-  it('renders with correct text', () => {
-    render(<Button>Click me</Button>)
-    expect(screen.getByText('Click me')).toBeInTheDocument()
-  })
+class MarketServiceTest {
 
-  it('calls onClick when clicked', () => {
-    const handleClick = jest.fn()
-    render(<Button onClick={handleClick}>Click</Button>)
+    private val marketRepository = mockk<MarketRepository>()
+    private val embeddingService = mockk<EmbeddingService>()
+    private val marketService = MarketService(marketRepository, embeddingService)
 
-    fireEvent.click(screen.getByRole('button'))
+    @Test
+    fun `returns markets matching the query`() {
+        // Arrange
+        val expectedMarkets = listOf(
+            Market(id = "1", name = "Test Market", status = MarketStatus.ACTIVE)
+        )
+        coEvery { marketRepository.findByStatus(MarketStatus.ACTIVE) } returns expectedMarkets
 
-    expect(handleClick).toHaveBeenCalledTimes(1)
-  })
+        // Act
+        val result = marketService.findActiveMarkets()
 
-  it('is disabled when disabled prop is true', () => {
-    render(<Button disabled>Click</Button>)
-    expect(screen.getByRole('button')).toBeDisabled()
-  })
-})
+        // Assert
+        assertThat(result).hasSize(1)
+        assertThat(result[0].name).isEqualTo("Test Market")
+    }
+
+    @Test
+    fun `throws exception when repository fails`() {
+        // Arrange
+        coEvery { marketRepository.findByStatus(any()) } throws RuntimeException("DB error")
+
+        // Act & Assert
+        assertThatThrownBy { marketService.findActiveMarkets() }
+            .isInstanceOf(ServiceException::class.java)
+            .hasMessageContaining("Failed to fetch markets")
+    }
+}
 ```
 
-### API Integration Test Pattern
+### Unit Test Pattern (JUnit 5 + Mockito for Java)
 
-```typescript
-import { NextRequest } from 'next/server'
-import { GET } from './route'
+```java
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-describe('GET /api/markets', () => {
-  it('returns markets successfully', async () => {
-    const request = new NextRequest('http://localhost/api/markets')
-    const response = await GET(request)
-    const data = await response.json()
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
-    expect(response.status).toBe(200)
-    expect(data.success).toBe(true)
-    expect(Array.isArray(data.data)).toBe(true)
-  })
+@ExtendWith(MockitoExtension.class)
+class MarketServiceTest {
 
-  it('validates query parameters', async () => {
-    const request = new NextRequest('http://localhost/api/markets?limit=invalid')
-    const response = await GET(request)
+    @Mock
+    private MarketRepository marketRepository;
 
-    expect(response.status).toBe(400)
-  })
+    @InjectMocks
+    private MarketService marketService;
 
-  it('handles database errors gracefully', async () => {
-    // Mock database failure
-    const request = new NextRequest('http://localhost/api/markets')
-    // Test error handling
-  })
-})
+    @Test
+    void returnsMarketsMatchingQuery() {
+        // Arrange
+        var expected = List.of(new Market("1", "Test Market", MarketStatus.ACTIVE));
+        when(marketRepository.findByStatus(MarketStatus.ACTIVE)).thenReturn(expected);
+
+        // Act
+        var result = marketService.findActiveMarkets();
+
+        // Assert
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("Test Market");
+    }
+}
 ```
 
-### E2E Test Pattern (Playwright)
+### API Integration Test Pattern (Spring MVC Test)
 
-```typescript
-import { test, expect } from '@playwright/test'
+```kotlin
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 
-test('user can search and filter markets', async ({ page }) => {
-  // Navigate to markets page
-  await page.goto('/')
-  await page.click('a[href="/markets"]')
+@SpringBootTest
+@AutoConfigureMockMvc
+class MarketControllerTest(
+    private val mockMvc: MockMvc
+) {
 
-  // Verify page loaded
-  await expect(page.locator('h1')).toContainText('Markets')
+    @Test
+    fun `GET markets returns list successfully`() {
+        mockMvc.get("/api/markets")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.success") { value(true) }
+                jsonPath("$.data") { isArray() }
+            }
+    }
 
-  // Search for markets
-  await page.fill('input[placeholder="Search markets"]', 'election')
+    @Test
+    fun `GET markets validates query parameters`() {
+        mockMvc.get("/api/markets?limit=invalid")
+            .andExpect {
+                status { isBadRequest() }
+            }
+    }
 
-  // Wait for debounce and results
-  await page.waitForTimeout(600)
+    @Test
+    fun `POST markets creates resource with valid data`() {
+        mockMvc.post("/api/markets") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                    "name": "Test Market",
+                    "description": "A test market",
+                    "endDate": "2025-12-31T00:00:00Z",
+                    "categories": ["politics"]
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.data.name") { value("Test Market") }
+        }
+    }
+}
+```
 
-  // Verify search results displayed
-  const results = page.locator('[data-testid="market-card"]')
-  await expect(results).toHaveCount(5, { timeout: 5000 })
+### Database Integration Test with Testcontainers
 
-  // Verify results contain search term
-  const firstResult = results.first()
-  await expect(firstResult).toContainText('election', { ignoreCase: true })
+```kotlin
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.junit.jupiter.Container
+import org.testcontainers.junit.jupiter.Testcontainers
 
-  // Filter by status
-  await page.click('button:has-text("Active")')
+@SpringBootTest
+@Testcontainers
+class MarketRepositoryIntegrationTest(
+    private val marketRepository: MarketRepository
+) {
 
-  // Verify filtered results
-  await expect(results).toHaveCount(3)
-})
+    companion object {
+        @Container
+        val postgres = PostgreSQLContainer("postgres:16-alpine")
 
-test('user can create a new market', async ({ page }) => {
-  // Login first
-  await page.goto('/creator-dashboard')
+        @JvmStatic
+        @DynamicPropertySource
+        fun configureProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
+        }
+    }
 
-  // Fill market creation form
-  await page.fill('input[name="name"]', 'Test Market')
-  await page.fill('textarea[name="description"]', 'Test description')
-  await page.fill('input[name="endDate"]', '2025-12-31')
+    @Test
+    fun `saves and retrieves market by status`() {
+        // Arrange
+        val market = Market(name = "Test Market", status = MarketStatus.ACTIVE)
+        marketRepository.save(market)
 
-  // Submit form
-  await page.click('button[type="submit"]')
+        // Act
+        val found = marketRepository.findByStatus(MarketStatus.ACTIVE)
 
-  // Verify success message
-  await expect(page.locator('text=Market created successfully')).toBeVisible()
+        // Assert
+        assertThat(found).hasSize(1)
+        assertThat(found[0].name).isEqualTo("Test Market")
+    }
 
-  // Verify redirect to market page
-  await expect(page).toHaveURL(/\/markets\/test-market/)
-})
+    @Test
+    fun `returns empty list when no markets match status`() {
+        val found = marketRepository.findByStatus(MarketStatus.CLOSED)
+        assertThat(found).isEmpty()
+    }
+}
+```
+
+### E2E Test Pattern (Testcontainers + RestAssured)
+
+```kotlin
+import io.restassured.RestAssured
+import io.restassured.module.kotlin.extensions.Given
+import io.restassured.module.kotlin.extensions.Then
+import io.restassured.module.kotlin.extensions.When
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.web.server.LocalServerPort
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class MarketE2ETest {
+
+    @LocalServerPort
+    private var port: Int = 0
+
+    @BeforeEach
+    fun setUp() {
+        RestAssured.port = port
+    }
+
+    @Test
+    fun `user can create and search for markets`() {
+        // Create a market
+        Given {
+            contentType(ContentType.JSON)
+            body("""
+                {
+                    "name": "Election Market",
+                    "description": "Will candidate X win?",
+                    "endDate": "2025-12-31T00:00:00Z",
+                    "categories": ["politics"]
+                }
+            """.trimIndent())
+        } When {
+            post("/api/markets")
+        } Then {
+            statusCode(201)
+            body("data.name", equalTo("Election Market"))
+        }
+
+        // Search for the market
+        Given {
+            param("q", "election")
+        } When {
+            get("/api/markets/search")
+        } Then {
+            statusCode(200)
+            body("data.size()", greaterThan(0))
+            body("data[0].name", containsStringIgnoringCase("election"))
+        }
+    }
+}
 ```
 
 ## Test File Organization
 
 ```
 src/
-├── components/
-│   ├── Button/
-│   │   ├── Button.tsx
-│   │   ├── Button.test.tsx          # Unit tests
-│   │   └── Button.stories.tsx       # Storybook
-│   └── MarketCard/
-│       ├── MarketCard.tsx
-│       └── MarketCard.test.tsx
-├── app/
-│   └── api/
-│       └── markets/
-│           ├── route.ts
-│           └── route.test.ts         # Integration tests
-└── e2e/
-    ├── markets.spec.ts               # E2E tests
-    ├── trading.spec.ts
-    └── auth.spec.ts
+├── main/
+│   └── kotlin/com/example/app/
+│       ├── market/
+│       │   ├── MarketController.kt
+│       │   ├── MarketService.kt
+│       │   ├── MarketRepository.kt
+│       │   └── Market.kt
+│       └── auth/
+└── test/
+    └── kotlin/com/example/app/
+        ├── market/
+        │   ├── MarketServiceTest.kt           # Unit tests (MockK)
+        │   ├── MarketControllerTest.kt        # MVC integration tests
+        │   └── MarketRepositoryTest.kt        # DB integration tests
+        ├── integration/
+        │   └── MarketE2ETest.kt               # E2E tests (Testcontainers)
+        └── support/
+            ├── TestContainersConfig.kt         # Shared container config
+            └── TestFixtures.kt                 # Test data builders
 ```
 
 ## Mocking External Services
 
-### Supabase Mock
+### MockK (Kotlin)
 
-```typescript
-jest.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => Promise.resolve({
-          data: [{ id: 1, name: 'Test Market' }],
-          error: null
-        }))
-      }))
-    }))
-  }
-}))
+```kotlin
+// Mocking a repository
+private val marketRepository = mockk<MarketRepository>()
+
+every { marketRepository.findById("test-id") } returns Optional.of(testMarket)
+coEvery { marketRepository.findByStatus(any()) } returns listOf(testMarket)
+
+// Verifying interactions
+verify(exactly = 1) { marketRepository.save(any()) }
+coVerify { embeddingService.generateEmbedding("election") }
 ```
 
-### Redis Mock
+### Mockito (Java)
 
-```typescript
-jest.mock('@/lib/redis', () => ({
-  searchMarketsByVector: jest.fn(() => Promise.resolve([
-    { slug: 'test-market', similarity_score: 0.95 }
-  ])),
-  checkRedisHealth: jest.fn(() => Promise.resolve({ connected: true }))
-}))
+```java
+// Mocking a repository
+@Mock
+private MarketRepository marketRepository;
+
+when(marketRepository.findById("test-id")).thenReturn(Optional.of(testMarket));
+when(marketRepository.findByStatus(any())).thenReturn(List.of(testMarket));
+
+// Verifying interactions
+verify(marketRepository, times(1)).save(any());
+verify(embeddingService).generateEmbedding("election");
 ```
 
-### OpenAI Mock
+### WireMock for External APIs
 
-```typescript
-jest.mock('@/lib/openai', () => ({
-  generateEmbedding: jest.fn(() => Promise.resolve(
-    new Array(1536).fill(0.1) // Mock 1536-dim embedding
-  ))
-}))
+```kotlin
+@WireMockTest(httpPort = 8089)
+class ExternalApiServiceTest {
+
+    @Test
+    fun `handles external API failure gracefully`() {
+        stubFor(
+            get(urlEqualTo("/api/external/data"))
+                .willReturn(aResponse().withStatus(503))
+        )
+
+        assertThatThrownBy { externalApiService.fetchData() }
+            .isInstanceOf(ServiceUnavailableException::class.java)
+    }
+
+    @Test
+    fun `parses external API response correctly`() {
+        stubFor(
+            get(urlEqualTo("/api/external/data"))
+                .willReturn(
+                    aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""{"result": "success", "value": 42}""")
+                )
+        )
+
+        val result = externalApiService.fetchData()
+        assertThat(result.value).isEqualTo(42)
+    }
+}
 ```
 
 ## Test Coverage Verification
@@ -313,23 +476,30 @@ jest.mock('@/lib/openai', () => ({
 ### Run Coverage Report
 
 ```bash
-npm run test:coverage
+./gradlew test jacocoTestReport
+# Report generated at build/reports/jacoco/test/html/index.html
 ```
 
-### Coverage Thresholds
+### Coverage Thresholds (build.gradle.kts)
 
-```json
-{
-  "jest": {
-    "coverageThresholds": {
-      "global": {
-        "branches": 80,
-        "functions": 80,
-        "lines": 80,
-        "statements": 80
-      }
+```kotlin
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                minimum = "0.80".toBigDecimal()
+            }
+            limit {
+                counter = "BRANCH"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
     }
-  }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }
 ```
 
@@ -337,54 +507,63 @@ npm run test:coverage
 
 ### WRONG: Testing Implementation Details
 
-```typescript
+```kotlin
 // Don't test internal state
-expect(component.state.count).toBe(5)
+assertThat(service.internalCache.size).isEqualTo(5)
 ```
 
-### CORRECT: Test User-Visible Behavior
+### CORRECT: Test Observable Behavior
 
-```typescript
-// Test what users see
-expect(screen.getByText('Count: 5')).toBeInTheDocument()
+```kotlin
+// Test what callers observe
+val result = service.findAll()
+assertThat(result).hasSize(5)
 ```
 
-### WRONG: Brittle Selectors
+### WRONG: Brittle Test Setup
 
-```typescript
-// Breaks easily
-await page.click('.css-class-xyz')
+```kotlin
+// Breaks easily with any schema change
+val market = Market("id-1", "name", "desc", MarketStatus.ACTIVE, Instant.now(), Instant.now(), null, null, 0L)
 ```
 
-### CORRECT: Semantic Selectors
+### CORRECT: Test Data Builders
 
-```typescript
+```kotlin
 // Resilient to changes
-await page.click('button:has-text("Submit")')
-await page.click('[data-testid="submit-button"]')
+fun testMarket(
+    id: String = "test-id",
+    name: String = "Test Market",
+    status: MarketStatus = MarketStatus.ACTIVE
+) = Market(id = id, name = name, status = status)
+
+val market = testMarket(name = "Custom Name")
 ```
 
 ### WRONG: No Test Isolation
 
-```typescript
+```kotlin
 // Tests depend on each other
-test('creates user', () => { /* ... */ })
-test('updates same user', () => { /* depends on previous test */ })
+@Test fun `creates user`() { /* ... */ }
+@Test fun `updates same user`() { /* depends on previous test */ }
 ```
 
 ### CORRECT: Independent Tests
 
-```typescript
+```kotlin
 // Each test sets up its own data
-test('creates user', () => {
-  const user = createTestUser()
-  // Test logic
-})
+@Test
+fun `creates user`() {
+    val user = testUser()
+    // Test logic
+}
 
-test('updates user', () => {
-  const user = createTestUser()
-  // Update logic
-})
+@Test
+fun `updates user`() {
+    val user = testUser()
+    userRepository.save(user)
+    // Update logic
+}
 ```
 
 ## Continuous Testing
@@ -392,7 +571,7 @@ test('updates user', () => {
 ### Watch Mode During Development
 
 ```bash
-npm test -- --watch
+./gradlew test --continuous
 # Tests run automatically on file changes
 ```
 
@@ -400,7 +579,7 @@ npm test -- --watch
 
 ```bash
 # Runs before every commit
-npm test && npm run lint
+./gradlew test && ./gradlew detekt
 ```
 
 ### CI/CD Integration
@@ -408,31 +587,35 @@ npm test && npm run lint
 ```yaml
 # GitHub Actions
 - name: Run Tests
-  run: npm test -- --coverage
+  run: ./gradlew test jacocoTestReport
+- name: Verify Coverage
+  run: ./gradlew jacocoTestCoverageVerification
 - name: Upload Coverage
-  uses: codecov/codecov-action@v3
+  uses: codecov/codecov-action@v4
+  with:
+    files: build/reports/jacoco/test/jacocoTestReport.xml
 ```
 
 ## Best Practices
 
 1. **Write Tests First** - Always TDD
 2. **One Assert Per Test** - Focus on single behavior
-3. **Descriptive Test Names** - Explain what's tested
+3. **Descriptive Test Names** - Use backtick names in Kotlin for readability
 4. **Arrange-Act-Assert** - Clear test structure
-5. **Mock External Dependencies** - Isolate unit tests
-6. **Test Edge Cases** - Null, undefined, empty, large
+5. **Mock External Dependencies** - Use MockK (Kotlin) or Mockito (Java)
+6. **Test Edge Cases** - Null, empty, boundary values
 7. **Test Error Paths** - Not just happy paths
 8. **Keep Tests Fast** - Unit tests < 50ms each
-9. **Clean Up After Tests** - No side effects
-10. **Review Coverage Reports** - Identify gaps
+9. **Use Testcontainers** - Real databases for integration tests
+10. **Review Coverage Reports** - Identify gaps with JaCoCo
 
 ## Success Metrics
 
-- 80%+ code coverage achieved
+- 80%+ code coverage achieved (JaCoCo)
 - All tests passing (green)
 - No skipped or disabled tests
 - Fast test execution (< 30s for unit tests)
-- E2E tests cover critical user flows
+- Integration tests use Testcontainers for real database verification
 - Tests catch bugs before production
 
 ---

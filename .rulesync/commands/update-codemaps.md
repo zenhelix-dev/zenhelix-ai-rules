@@ -9,41 +9,50 @@ Analyze the codebase structure and generate token-lean architecture documentatio
 
 ## Step 1: Scan Project Structure
 
-1. Identify the project type (monorepo, single app, library, microservice)
-2. Find all source directories (src/, lib/, app/, packages/)
-3. Map entry points (main.ts, index.ts, app.py, main.go, etc.)
+1. Identify the project type (multi-module Gradle/Maven, single module, library, microservice)
+2. Find all source directories (`src/main/kotlin/`, `src/main/java/`, submodule `src/` trees)
+3. Map entry points (`fun main()`, `@SpringBootApplication`, `public static void main(String[] args)`, etc.)
 
 ## Step 2: Generate Codemaps
 
 Create or update codemaps in `docs/CODEMAPS/` (or `.reports/codemaps/`):
 
-| File              | Contents                                                      |
-|-------------------|---------------------------------------------------------------|
-| `architecture.md` | High-level system diagram, service boundaries, data flow      |
-| `backend.md`      | API routes, middleware chain, service → repository mapping    |
-| `frontend.md`     | Page tree, component hierarchy, state management flow         |
-| `data.md`         | Database tables, relationships, migration history             |
-| `dependencies.md` | External services, third-party integrations, shared libraries |
+| File              | Contents                                                                   |
+|-------------------|----------------------------------------------------------------------------|
+| `architecture.md` | High-level system diagram, module boundaries, data flow                    |
+| `api.md`          | API routes (controllers), filter/interceptor chain, service → repo mapping |
+| `modules.md`      | Gradle/Maven module tree, inter-module dependencies, package structure     |
+| `data.md`         | Database tables, JPA/Exposed entities, relationships, migration history    |
+| `dependencies.md` | External services, third-party libraries (from build.gradle.kts/pom.xml)   |
 
 ### Codemap Format
 
 Each codemap should be token-lean — optimized for AI context consumption:
 
 ```markdown
-# Backend Architecture
+# API Architecture
 
 ## Routes
-POST /api/users → UserController.create → UserService.create → UserRepo.insert
-GET  /api/users/:id → UserController.get → UserService.findById → UserRepo.findById
+POST /api/users → UserController.create() → UserService.create() → UserRepository.save()
+GET  /api/users/{id} → UserController.get() → UserService.findById() → UserRepository.findById()
 
 ## Key Files
-src/services/user.ts (business logic, 120 lines)
-src/repos/user.ts (database access, 80 lines)
+com.example.service.UserService (business logic, 120 lines)
+com.example.repository.UserRepository (data access, 80 lines)
 
-## Dependencies
-- PostgreSQL (primary data store)
-- Redis (session cache, rate limiting)
-- Stripe (payment processing)
+## Module Dependencies (from build.gradle.kts / pom.xml)
+- spring-boot-starter-web (REST API)
+- spring-boot-starter-data-jpa (persistence)
+- postgresql (primary data store)
+- caffeine (caching)
+
+## Package Structure (from jdeps / Gradle dependencies task)
+com.example
+├── controller/   (REST endpoints)
+├── service/      (business logic)
+├── repository/   (data access)
+├── model/        (domain entities)
+└── config/       (Spring configuration)
 ```
 
 ## Step 3: Diff Detection
@@ -72,7 +81,9 @@ Write a summary to `.reports/codemap-diff.txt`:
 ## Tips
 
 - Focus on **high-level structure**, not implementation details
-- Prefer **file paths and function signatures** over full code blocks
+- Prefer **package paths and function signatures** over full code blocks
+- Use `./gradlew dependencies` or `mvn dependency:tree` to map external deps
+- Use `jdeps` to analyze module/package-level dependencies for Java 9+ projects
 - Keep each codemap under **1000 tokens** for efficient context loading
 - Use ASCII diagrams for data flow instead of verbose descriptions
 - Run after major feature additions or refactoring sessions

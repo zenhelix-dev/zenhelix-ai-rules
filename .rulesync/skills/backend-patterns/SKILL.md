@@ -1,6 +1,6 @@
 ---
 name: backend-patterns
-description: "Backend architecture patterns, API design, database optimization, and server-side best practices for Node.js, Express, and Next.js API routes."
+description: "Backend architecture patterns, API design, database optimization, and server-side best practices for Spring Boot with Kotlin and Java."
 targets: ["claudecode"]
 ---
 
@@ -13,16 +13,16 @@ Backend architecture patterns and best practices for scalable server-side applic
 - Designing REST or GraphQL API endpoints
 - Implementing repository, service, or controller layers
 - Optimizing database queries (N+1, indexing, connection pooling)
-- Adding caching (Redis, in-memory, HTTP cache headers)
+- Adding caching (Redis, in-memory, Spring Cache)
 - Setting up background jobs or async processing
 - Structuring error handling and validation for APIs
-- Building middleware (auth, logging, rate limiting)
+- Building filters, interceptors, or Spring Security configurations
 
 ## API Design Patterns
 
 ### RESTful API Structure
 
-```typescript
+```kotlin
 // Resource-based URLs
 GET    /api/markets                 # List resources
 GET    /api/markets/:id             # Get single resource
@@ -37,227 +37,258 @@ GET /api/markets?status=active&sort=volume&limit=20&offset=0
 
 ### Repository Pattern
 
-```typescript
+```kotlin
 // Abstract data access logic
-interface MarketRepository {
-  findAll(filters?: MarketFilters): Promise<Market[]>
-  findById(id: string): Promise<Market | null>
-  create(data: CreateMarketDto): Promise<Market>
-  update(id: string, data: UpdateMarketDto): Promise<Market>
-  delete(id: string): Promise<void>
+interface MarketRepository : JpaRepository<Market, String> {
+
+    fun findByStatus(status: MarketStatus): List<Market>
+
+    @Query("SELECT m FROM Market m WHERE m.status = :status ORDER BY m.volume DESC")
+    fun findByStatusOrderByVolumeDesc(
+        @Param("status") status: MarketStatus,
+        pageable: Pageable
+    ): Page<Market>
 }
 
-class SupabaseMarketRepository implements MarketRepository {
-  async findAll(filters?: MarketFilters): Promise<Market[]> {
-    let query = supabase.from('markets').select('*')
+// Custom repository for complex queries
+interface MarketRepositoryCustom {
+    fun findAllWithFilters(filters: MarketFilters): List<Market>
+}
 
-    if (filters?.status) {
-      query = query.eq('status', filters.status)
+class MarketRepositoryCustomImpl(
+    private val entityManager: EntityManager
+) : MarketRepositoryCustom {
+
+    override fun findAllWithFilters(filters: MarketFilters): List<Market> {
+        val cb = entityManager.criteriaBuilder
+        val query = cb.createQuery(Market::class.java)
+        val root = query.from(Market::class.java)
+        val predicates = mutableListOf<Predicate>()
+
+        filters.status?.let {
+            predicates.add(cb.equal(root.get<MarketStatus>("status"), it))
+        }
+
+        query.where(*predicates.toTypedArray())
+
+        return entityManager.createQuery(query)
+            .setMaxResults(filters.limit ?: 20)
+            .resultList
     }
-
-    if (filters?.limit) {
-      query = query.limit(filters.limit)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw new Error(error.message)
-    return data
-  }
-
-  // Other methods...
 }
 ```
 
 ### Service Layer Pattern
 
-```typescript
+```kotlin
 // Business logic separated from data access
-class MarketService {
-  constructor(private marketRepo: MarketRepository) {}
+@Service
+class MarketService(
+    private val marketRepository: MarketRepository,
+    private val embeddingService: EmbeddingService,
+    private val vectorSearchService: VectorSearchService
+) {
 
-  async searchMarkets(query: string, limit: number = 10): Promise<Market[]> {
-    // Business logic
-    const embedding = await generateEmbedding(query)
-    const results = await this.vectorSearch(embedding, limit)
+    suspend fun searchMarkets(query: String, limit: Int = 10): List<Market> {
+        // Business logic
+        val embedding = embeddingService.generateEmbedding(query)
+        val results = vectorSearchService.search(embedding, limit)
 
-    // Fetch full data
-    const markets = await this.marketRepo.findByIds(results.map(r => r.id))
+        // Fetch full data
+        val markets = marketRepository.findAllById(results.map { it.id })
 
-    // Sort by similarity
-    return markets.sort((a, b) => {
-      const scoreA = results.find(r => r.id === a.id)?.score || 0
-      const scoreB = results.find(r => r.id === b.id)?.score || 0
-      return scoreA - scoreB
-    })
-  }
-
-  private async vectorSearch(embedding: number[], limit: number) {
-    // Vector search implementation
-  }
+        // Sort by similarity
+        val scoreMap = results.associate { it.id to it.score }
+        return markets.sortedByDescending { scoreMap[it.id] ?: 0.0 }
+    }
 }
 ```
 
-### Middleware Pattern
+### Filter/Interceptor Pattern
 
-```typescript
-// Request/response processing pipeline
-export function withAuth(handler: NextApiHandler): NextApiHandler {
-  return async (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '')
+```kotlin
+// Request/response processing pipeline (replaces middleware)
+@Component
+class AuthenticationFilter(
+    private val tokenService: TokenService
+) : OncePerRequestFilter() {
 
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' })
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
+    ) {
+        val token = request.getHeader("Authorization")?.removePrefix("Bearer ")
+
+        if (token == null) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+            return
+        }
+
+        try {
+            val user = tokenService.verifyToken(token)
+            SecurityContextHolder.getContext().authentication =
+                UsernamePasswordAuthenticationToken(user, null, user.authorities)
+            filterChain.doFilter(request, response)
+        } catch (e: InvalidTokenException) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token")
+        }
     }
-
-    try {
-      const user = await verifyToken(token)
-      req.user = user
-      return handler(req, res)
-    } catch (error) {
-      return res.status(401).json({ error: 'Invalid token' })
-    }
-  }
 }
 
-// Usage
-export default withAuth(async (req, res) => {
-  // Handler has access to req.user
-})
+// HandlerInterceptor for cross-cutting concerns
+@Component
+class RequestLoggingInterceptor : HandlerInterceptor {
+
+    override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
+        logger.info("Incoming request: {} {}", request.method, request.requestURI)
+        return true
+    }
+
+    override fun afterCompletion(
+        request: HttpServletRequest, response: HttpServletResponse,
+        handler: Any, ex: Exception?
+    ) {
+        logger.info("Completed: {} {} -> {}", request.method, request.requestURI, response.status)
+    }
+}
 ```
 
 ## Database Patterns
 
 ### Query Optimization
 
-```typescript
-// GOOD: Select only needed columns
-const { data } = await supabase
-  .from('markets')
-  .select('id, name, status, volume')
-  .eq('status', 'active')
-  .order('volume', { ascending: false })
-  .limit(10)
+```kotlin
+// GOOD: Select only needed columns with projections
+interface MarketSummary {
+    val id: String
+    val name: String
+    val status: MarketStatus
+    val volume: Long
+}
+
+@Query("SELECT m.id as id, m.name as name, m.status as status, m.volume as volume " +
+       "FROM Market m WHERE m.status = :status ORDER BY m.volume DESC")
+fun findActiveSummaries(@Param("status") status: MarketStatus, pageable: Pageable): Page<MarketSummary>
 
 // BAD: Select everything
-const { data } = await supabase
-  .from('markets')
-  .select('*')
+fun findAll(): List<Market>
 ```
 
 ### N+1 Query Prevention
 
-```typescript
+```kotlin
 // BAD: N+1 query problem
-const markets = await getMarkets()
-for (const market of markets) {
-  market.creator = await getUser(market.creator_id)  // N queries
+val markets = marketRepository.findAll()
+for (market in markets) {
+    market.creator = userRepository.findById(market.creatorId).orElse(null)  // N queries
 }
 
-// GOOD: Batch fetch
-const markets = await getMarkets()
-const creatorIds = markets.map(m => m.creator_id)
-const creators = await getUsers(creatorIds)  // 1 query
-const creatorMap = new Map(creators.map(c => [c.id, c]))
+// GOOD: Fetch join in JPQL
+@Query("SELECT m FROM Market m JOIN FETCH m.creator WHERE m.status = :status")
+fun findWithCreator(@Param("status") status: MarketStatus): List<Market>
 
-markets.forEach(market => {
-  market.creator = creatorMap.get(market.creator_id)
-})
+// GOOD: Batch fetch with @EntityGraph
+@EntityGraph(attributePaths = ["creator", "categories"])
+fun findByStatus(status: MarketStatus): List<Market>
 ```
 
 ### Transaction Pattern
 
-```typescript
-async function createMarketWithPosition(
-  marketData: CreateMarketDto,
-  positionData: CreatePositionDto
+```kotlin
+@Service
+class MarketService(
+    private val marketRepository: MarketRepository,
+    private val positionRepository: PositionRepository
 ) {
-  // Use Supabase transaction
-  const { data, error } = await supabase.rpc('create_market_with_position', {
-    market_data: marketData,
-    position_data: positionData
-  })
 
-  if (error) throw new Error('Transaction failed')
-  return data
+    @Transactional
+    fun createMarketWithPosition(
+        marketData: CreateMarketDto,
+        positionData: CreatePositionDto
+    ): Market {
+        val market = marketRepository.save(
+            Market(
+                name = marketData.name,
+                description = marketData.description,
+                status = MarketStatus.ACTIVE
+            )
+        )
+
+        positionRepository.save(
+            Position(
+                marketId = market.id,
+                amount = positionData.amount,
+                side = positionData.side
+            )
+        )
+
+        return market
+        // Transaction commits automatically; rolls back on exception
+    }
 }
-
-// SQL function in Supabase
-CREATE OR REPLACE FUNCTION create_market_with_position(
-  market_data jsonb,
-  position_data jsonb
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  -- Start transaction automatically
-  INSERT INTO markets VALUES (market_data);
-  INSERT INTO positions VALUES (position_data);
-  RETURN jsonb_build_object('success', true);
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Rollback happens automatically
-    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
-END;
-$$;
 ```
 
 ## Caching Strategies
 
-### Redis Caching Layer
+### Spring Cache with Redis
 
-```typescript
-class CachedMarketRepository implements MarketRepository {
-  constructor(
-    private baseRepo: MarketRepository,
-    private redis: RedisClient
-  ) {}
+```kotlin
+@Service
+class CachedMarketService(
+    private val marketRepository: MarketRepository
+) {
 
-  async findById(id: string): Promise<Market | null> {
-    // Check cache first
-    const cached = await this.redis.get(`market:${id}`)
-
-    if (cached) {
-      return JSON.parse(cached)
+    @Cacheable(value = ["markets"], key = "#id")
+    fun findById(id: String): Market? {
+        return marketRepository.findById(id).orElse(null)
     }
 
-    // Cache miss - fetch from database
-    const market = await this.baseRepo.findById(id)
-
-    if (market) {
-      // Cache for 5 minutes
-      await this.redis.setex(`market:${id}`, 300, JSON.stringify(market))
+    @CacheEvict(value = ["markets"], key = "#id")
+    fun invalidateCache(id: String) {
+        // Cache entry removed
     }
 
-    return market
-  }
+    @CachePut(value = ["markets"], key = "#result.id")
+    fun updateMarket(id: String, data: UpdateMarketDto): Market {
+        val market = marketRepository.findById(id)
+            .orElseThrow { NotFoundException("Market not found: $id") }
 
-  async invalidateCache(id: string): Promise<void> {
-    await this.redis.del(`market:${id}`)
-  }
+        val updated = market.copy(
+            name = data.name ?: market.name,
+            description = data.description ?: market.description
+        )
+
+        return marketRepository.save(updated)
+    }
 }
 ```
 
-### Cache-Aside Pattern
+### Cache-Aside Pattern with RedisTemplate
 
-```typescript
-async function getMarketWithCache(id: string): Promise<Market> {
-  const cacheKey = `market:${id}`
+```kotlin
+@Service
+class MarketCacheService(
+    private val redisTemplate: RedisTemplate<String, Market>,
+    private val marketRepository: MarketRepository
+) {
 
-  // Try cache
-  const cached = await redis.get(cacheKey)
-  if (cached) return JSON.parse(cached)
+    fun getMarketWithCache(id: String): Market {
+        val cacheKey = "market:$id"
 
-  // Cache miss - fetch from DB
-  const market = await db.markets.findUnique({ where: { id } })
+        // Try cache
+        val cached = redisTemplate.opsForValue().get(cacheKey)
+        if (cached != null) return cached
 
-  if (!market) throw new Error('Market not found')
+        // Cache miss - fetch from DB
+        val market = marketRepository.findById(id)
+            .orElseThrow { NotFoundException("Market not found") }
 
-  // Update cache
-  await redis.setex(cacheKey, 300, JSON.stringify(market))
+        // Update cache with 5-minute TTL
+        redisTemplate.opsForValue().set(cacheKey, market, Duration.ofMinutes(5))
 
-  return market
+        return market
+    }
 }
 ```
 
@@ -265,334 +296,320 @@ async function getMarketWithCache(id: string): Promise<Market> {
 
 ### Centralized Error Handler
 
-```typescript
-class ApiError extends Error {
-  constructor(
-    public statusCode: number,
-    public message: string,
-    public isOperational = true
-  ) {
-    super(message)
-    Object.setPrototypeOf(this, ApiError.prototype)
-  }
+```kotlin
+// Custom exception hierarchy
+sealed class ApiException(
+    val statusCode: HttpStatus,
+    override val message: String,
+    cause: Throwable? = null
+) : RuntimeException(message, cause)
+
+class NotFoundException(message: String) : ApiException(HttpStatus.NOT_FOUND, message)
+class ValidationException(message: String) : ApiException(HttpStatus.BAD_REQUEST, message)
+class UnauthorizedException(message: String) : ApiException(HttpStatus.UNAUTHORIZED, message)
+class ForbiddenException(message: String) : ApiException(HttpStatus.FORBIDDEN, message)
+
+// Global exception handler
+@RestControllerAdvice
+class GlobalExceptionHandler {
+
+    @ExceptionHandler(ApiException::class)
+    fun handleApiException(ex: ApiException): ResponseEntity<ApiResponse<Nothing>> {
+        return ResponseEntity.status(ex.statusCode).body(
+            ApiResponse(success = false, error = ex.message)
+        )
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException::class)
+    fun handleValidation(ex: MethodArgumentNotValidException): ResponseEntity<ApiResponse<Nothing>> {
+        val errors = ex.bindingResult.fieldErrors
+            .map { "${it.field}: ${it.defaultMessage}" }
+
+        return ResponseEntity.badRequest().body(
+            ApiResponse(success = false, error = "Validation failed", details = errors)
+        )
+    }
+
+    @ExceptionHandler(Exception::class)
+    fun handleUnexpected(ex: Exception): ResponseEntity<ApiResponse<Nothing>> {
+        logger.error("Unexpected error", ex)
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+            ApiResponse(success = false, error = "Internal server error")
+        )
+    }
 }
 
-export function errorHandler(error: unknown, req: Request): Response {
-  if (error instanceof ApiError) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.statusCode })
-  }
-
-  if (error instanceof z.ZodError) {
-    return NextResponse.json({
-      success: false,
-      error: 'Validation failed',
-      details: error.errors
-    }, { status: 400 })
-  }
-
-  // Log unexpected errors
-  console.error('Unexpected error:', error)
-
-  return NextResponse.json({
-    success: false,
-    error: 'Internal server error'
-  }, { status: 500 })
-}
-
-// Usage
-export async function GET(request: Request) {
-  try {
-    const data = await fetchData()
-    return NextResponse.json({ success: true, data })
-  } catch (error) {
-    return errorHandler(error, request)
-  }
+// Usage in controller
+@GetMapping("/api/markets")
+fun getMarkets(): ResponseEntity<ApiResponse<List<Market>>> {
+    val markets = marketService.findAll()
+    return ResponseEntity.ok(ApiResponse(success = true, data = markets))
 }
 ```
 
 ### Retry with Exponential Backoff
 
-```typescript
-async function fetchWithRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3
-): Promise<T> {
-  let lastError: Error
+```kotlin
+// Using Spring Retry
+@Retryable(
+    value = [ServiceUnavailableException::class],
+    maxAttempts = 3,
+    backoff = Backoff(delay = 1000, multiplier = 2.0)
+)
+suspend fun fetchFromExternalApi(): ExternalData {
+    return externalApiClient.fetch()
+}
 
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error as Error
+@Recover
+fun recoverFromFetch(ex: ServiceUnavailableException): ExternalData {
+    logger.error("All retries exhausted for external API", ex)
+    throw ServiceException("External API unavailable after retries", ex)
+}
 
-      if (i < maxRetries - 1) {
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, i) * 1000
-        await new Promise(resolve => setTimeout(resolve, delay))
-      }
+// Manual retry with Kotlin coroutines
+suspend fun <T> withRetry(
+    maxRetries: Int = 3,
+    block: suspend () -> T
+): T {
+    var lastException: Exception? = null
+
+    repeat(maxRetries) { attempt ->
+        try {
+            return block()
+        } catch (e: Exception) {
+            lastException = e
+            if (attempt < maxRetries - 1) {
+                val delayMs = 1000L * 2.0.pow(attempt).toLong()
+                delay(delayMs)
+            }
+        }
     }
-  }
 
-  throw lastError!
+    throw lastException!!
 }
 
 // Usage
-const data = await fetchWithRetry(() => fetchFromAPI())
+val data = withRetry { fetchFromExternalApi() }
 ```
 
 ## Authentication & Authorization
 
-### JWT Token Validation
+### Spring Security with JWT
 
-```typescript
-import jwt from 'jsonwebtoken'
+```kotlin
+@Configuration
+@EnableWebSecurity
+class SecurityConfig(
+    private val jwtTokenProvider: JwtTokenProvider
+) {
 
-interface JWTPayload {
-  userId: string
-  email: string
-  role: 'admin' | 'user'
+    @Bean
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        return http
+            .csrf { it.disable() }
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests {
+                it.requestMatchers("/api/auth/**").permitAll()
+                it.requestMatchers("/api/admin/**").hasRole("ADMIN")
+                it.anyRequest().authenticated()
+            }
+            .addFilterBefore(JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter::class.java)
+            .build()
+    }
 }
 
-export function verifyToken(token: string): JWTPayload {
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload
-    return payload
-  } catch (error) {
-    throw new ApiError(401, 'Invalid token')
-  }
-}
+@Component
+class JwtTokenProvider(
+    @Value("\${jwt.secret}") private val secretKey: String
+) {
 
-export async function requireAuth(request: Request) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+    fun verifyToken(token: String): UserDetails {
+        return try {
+            val claims = Jwts.parserBuilder()
+                .setSigningKey(Keys.hmacShaKeyFor(secretKey.toByteArray()))
+                .build()
+                .parseClaimsJws(token)
+                .body
 
-  if (!token) {
-    throw new ApiError(401, 'Missing authorization token')
-  }
-
-  return verifyToken(token)
-}
-
-// Usage in API route
-export async function GET(request: Request) {
-  const user = await requireAuth(request)
-
-  const data = await getDataForUser(user.userId)
-
-  return NextResponse.json({ success: true, data })
+            UserPrincipal(
+                userId = claims.subject,
+                email = claims["email"] as String,
+                role = claims["role"] as String
+            )
+        } catch (e: JwtException) {
+            throw UnauthorizedException("Invalid token")
+        }
+    }
 }
 ```
 
 ### Role-Based Access Control
 
-```typescript
-type Permission = 'read' | 'write' | 'delete' | 'admin'
-
-interface User {
-  id: string
-  role: 'admin' | 'moderator' | 'user'
+```kotlin
+enum class Permission {
+    READ, WRITE, DELETE, ADMIN
 }
 
-const rolePermissions: Record<User['role'], Permission[]> = {
-  admin: ['read', 'write', 'delete', 'admin'],
-  moderator: ['read', 'write', 'delete'],
-  user: ['read', 'write']
+enum class Role(val permissions: Set<Permission>) {
+    ADMIN(setOf(Permission.READ, Permission.WRITE, Permission.DELETE, Permission.ADMIN)),
+    MODERATOR(setOf(Permission.READ, Permission.WRITE, Permission.DELETE)),
+    USER(setOf(Permission.READ, Permission.WRITE))
 }
 
-export function hasPermission(user: User, permission: Permission): boolean {
-  return rolePermissions[user.role].includes(permission)
+// Method-level security
+@PreAuthorize("hasRole('ADMIN')")
+@DeleteMapping("/api/markets/{id}")
+fun deleteMarket(@PathVariable id: String): ResponseEntity<ApiResponse<Nothing>> {
+    marketService.delete(id)
+    return ResponseEntity.ok(ApiResponse(success = true))
 }
 
-export function requirePermission(permission: Permission) {
-  return (handler: (request: Request, user: User) => Promise<Response>) => {
-    return async (request: Request) => {
-      const user = await requireAuth(request)
-
-      if (!hasPermission(user, permission)) {
-        throw new ApiError(403, 'Insufficient permissions')
-      }
-
-      return handler(request, user)
-    }
-  }
+// Custom permission check
+@PreAuthorize("@permissionEvaluator.hasPermission(authentication, #id, 'MARKET', 'DELETE')")
+@DeleteMapping("/api/markets/{id}")
+fun deleteMarket(@PathVariable id: String): ResponseEntity<ApiResponse<Nothing>> {
+    marketService.delete(id)
+    return ResponseEntity.ok(ApiResponse(success = true))
 }
-
-// Usage - HOF wraps the handler
-export const DELETE = requirePermission('delete')(
-  async (request: Request, user: User) => {
-    // Handler receives authenticated user with verified permission
-    return new Response('Deleted', { status: 200 })
-  }
-)
 ```
 
 ## Rate Limiting
 
-### Simple In-Memory Rate Limiter
+### Bucket4j Rate Limiter
 
-```typescript
-class RateLimiter {
-  private requests = new Map<string, number[]>()
+```kotlin
+@Component
+class RateLimitingFilter(
+    private val cacheManager: CacheManager
+) : OncePerRequestFilter() {
 
-  async checkLimit(
-    identifier: string,
-    maxRequests: number,
-    windowMs: number
-  ): Promise<boolean> {
-    const now = Date.now()
-    const requests = this.requests.get(identifier) || []
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
+    ) {
+        val ip = request.getHeader("X-Forwarded-For") ?: request.remoteAddr
+        val bucket = resolveBucket(ip)
 
-    // Remove old requests outside window
-    const recentRequests = requests.filter(time => now - time < windowMs)
-
-    if (recentRequests.length >= maxRequests) {
-      return false  // Rate limit exceeded
+        if (bucket.tryConsume(1)) {
+            filterChain.doFilter(request, response)
+        } else {
+            response.status = HttpServletResponse.SC_TOO_MANY_REQUESTS
+            response.writer.write("""{"success": false, "error": "Rate limit exceeded"}""")
+        }
     }
 
-    // Add current request
-    recentRequests.push(now)
-    this.requests.set(identifier, recentRequests)
-
-    return true
-  }
-}
-
-const limiter = new RateLimiter()
-
-export async function GET(request: Request) {
-  const ip = request.headers.get('x-forwarded-for') || 'unknown'
-
-  const allowed = await limiter.checkLimit(ip, 100, 60000)  // 100 req/min
-
-  if (!allowed) {
-    return NextResponse.json({
-      error: 'Rate limit exceeded'
-    }, { status: 429 })
-  }
-
-  // Continue with request
+    private fun resolveBucket(key: String): Bucket {
+        return Bucket4j.builder()
+            .addLimit(Bandwidth.classic(100, Refill.intervally(100, Duration.ofMinutes(1))))
+            .build()
+    }
 }
 ```
 
 ## Background Jobs & Queues
 
-### Simple Queue Pattern
+### Spring Scheduling
 
-```typescript
-class JobQueue<T> {
-  private queue: T[] = []
-  private processing = false
+```kotlin
+@Component
+class MarketIndexingJob(
+    private val marketService: MarketService,
+    private val indexService: IndexService
+) {
 
-  async add(job: T): Promise<void> {
-    this.queue.push(job)
+    @Scheduled(fixedDelay = 60_000) // Every 60 seconds
+    fun reindexPendingMarkets() {
+        val pending = marketService.findPendingIndexing()
 
-    if (!this.processing) {
-      this.process()
+        for (market in pending) {
+            try {
+                indexService.index(market)
+                marketService.markIndexed(market.id)
+            } catch (e: Exception) {
+                logger.error("Failed to index market: ${market.id}", e)
+            }
+        }
     }
-  }
-
-  private async process(): Promise<void> {
-    this.processing = true
-
-    while (this.queue.length > 0) {
-      const job = this.queue.shift()!
-
-      try {
-        await this.execute(job)
-      } catch (error) {
-        console.error('Job failed:', error)
-      }
-    }
-
-    this.processing = false
-  }
-
-  private async execute(job: T): Promise<void> {
-    // Job execution logic
-  }
 }
 
-// Usage for indexing markets
-interface IndexJob {
-  marketId: string
+// Async processing with @Async
+@Service
+class AsyncMarketService(
+    private val indexService: IndexService
+) {
+
+    @Async
+    fun indexMarketAsync(marketId: String): CompletableFuture<Void> {
+        indexService.indexById(marketId)
+        return CompletableFuture.completedFuture(null)
+    }
 }
 
-const indexQueue = new JobQueue<IndexJob>()
+// Controller usage
+@PostMapping("/api/markets")
+fun createMarket(@Valid @RequestBody request: CreateMarketRequest): ResponseEntity<ApiResponse<Market>> {
+    val market = marketService.create(request)
 
-export async function POST(request: Request) {
-  const { marketId } = await request.json()
+    // Add to async queue instead of blocking
+    asyncMarketService.indexMarketAsync(market.id)
 
-  // Add to queue instead of blocking
-  await indexQueue.add({ marketId })
-
-  return NextResponse.json({ success: true, message: 'Job queued' })
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ApiResponse(success = true, data = market))
 }
 ```
 
 ## Logging & Monitoring
 
-### Structured Logging
+### Structured Logging with SLF4J + MDC
 
-```typescript
-interface LogContext {
-  userId?: string
-  requestId?: string
-  method?: string
-  path?: string
-  [key: string]: unknown
-}
+```kotlin
+@Component
+class RequestContextFilter : OncePerRequestFilter() {
 
-class Logger {
-  log(level: 'info' | 'warn' | 'error', message: string, context?: LogContext) {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...context
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
+    ) {
+        val requestId = UUID.randomUUID().toString()
+        MDC.put("requestId", requestId)
+        MDC.put("method", request.method)
+        MDC.put("path", request.requestURI)
+
+        try {
+            filterChain.doFilter(request, response)
+        } finally {
+            MDC.clear()
+        }
     }
-
-    console.log(JSON.stringify(entry))
-  }
-
-  info(message: string, context?: LogContext) {
-    this.log('info', message, context)
-  }
-
-  warn(message: string, context?: LogContext) {
-    this.log('warn', message, context)
-  }
-
-  error(message: string, error: Error, context?: LogContext) {
-    this.log('error', message, {
-      ...context,
-      error: error.message,
-      stack: error.stack
-    })
-  }
 }
 
-const logger = new Logger()
+// Usage in service
+@Service
+class MarketService(
+    private val marketRepository: MarketRepository
+) {
 
-// Usage
-export async function GET(request: Request) {
-  const requestId = crypto.randomUUID()
+    private val logger = LoggerFactory.getLogger(MarketService::class.java)
 
-  logger.info('Fetching markets', {
-    requestId,
-    method: 'GET',
-    path: '/api/markets'
-  })
+    fun findAll(): List<Market> {
+        logger.info("Fetching all markets")
 
-  try {
-    const markets = await fetchMarkets()
-    return NextResponse.json({ success: true, data: markets })
-  } catch (error) {
-    logger.error('Failed to fetch markets', error as Error, { requestId })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
-  }
+        return try {
+            val markets = marketRepository.findAll()
+            logger.info("Found {} markets", markets.size)
+            markets
+        } catch (e: Exception) {
+            logger.error("Failed to fetch markets", e)
+            throw ServiceException("Failed to fetch markets", e)
+        }
+    }
 }
+
+// logback-spring.xml for structured JSON output
+// <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
 ```
 
 **Remember**: Backend patterns enable scalable, maintainable server-side applications. Choose patterns that fit your complexity level.

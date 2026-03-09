@@ -1,6 +1,6 @@
 ---
 name: coding-standards
-description: "Universal coding standards, best practices, and patterns for TypeScript, JavaScript, React, and Node.js development."
+description: "Universal coding standards, best practices, and patterns for Kotlin and Java development."
 targets: ["claudecode"]
 ---
 
@@ -14,7 +14,7 @@ Universal coding standards applicable across all projects.
 - Reviewing code for quality and maintainability
 - Refactoring existing code to follow conventions
 - Enforcing naming, formatting, or structural consistency
-- Setting up linting, formatting, or type-checking rules
+- Setting up linting, formatting, or static analysis rules
 - Onboarding new contributors to coding conventions
 
 ## Code Quality Principles
@@ -47,196 +47,190 @@ Universal coding standards applicable across all projects.
 - Add complexity only when required
 - Start simple, refactor when needed
 
-## TypeScript/JavaScript Standards
+## Kotlin Standards
 
 ### Variable Naming
 
-```typescript
+```kotlin
 // GOOD: Descriptive names
-const marketSearchQuery = 'election'
-const isUserAuthenticated = true
-const totalRevenue = 1000
+val marketSearchQuery = "election"
+val isUserAuthenticated = true
+val totalRevenue = 1000L
 
 // BAD: Unclear names
-const q = 'election'
-const flag = true
-const x = 1000
+val q = "election"
+val flag = true
+val x = 1000L
 ```
 
 ### Function Naming
 
-```typescript
+```kotlin
 // GOOD: Verb-noun pattern
-async function fetchMarketData(marketId: string) { }
-function calculateSimilarity(a: number[], b: number[]) { }
-function isValidEmail(email: string): boolean { }
+suspend fun fetchMarketData(marketId: String): MarketData { }
+fun calculateSimilarity(a: DoubleArray, b: DoubleArray): Double { }
+fun isValidEmail(email: String): Boolean { }
 
 // BAD: Unclear or noun-only
-async function market(id: string) { }
-function similarity(a, b) { }
-function email(e) { }
+suspend fun market(id: String): Any { }
+fun similarity(a: DoubleArray, b: DoubleArray): Any { }
+fun email(e: String): Any { }
 ```
 
 ### Immutability Pattern (CRITICAL)
 
-```typescript
-// ALWAYS use spread operator
-const updatedUser = {
-  ...user,
-  name: 'New Name'
-}
+```kotlin
+// ALWAYS use data class copy
+val updatedUser = user.copy(name = "New Name")
 
-const updatedArray = [...items, newItem]
+val updatedList = items + newItem
 
 // NEVER mutate directly
-user.name = 'New Name'  // BAD
-items.push(newItem)     // BAD
+user.name = "New Name"          // BAD (use val + copy)
+(items as MutableList).add(newItem)  // BAD
 ```
 
 ### Error Handling
 
-```typescript
+```kotlin
 // GOOD: Comprehensive error handling
-async function fetchData(url: string) {
-  try {
-    const response = await fetch(url)
+suspend fun fetchData(url: String): ResponseData {
+    return try {
+        val response = httpClient.get(url)
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        if (!response.status.isSuccess()) {
+            throw HttpException("HTTP ${response.status.value}: ${response.status.description}")
+        }
+
+        response.body()
+    } catch (e: HttpException) {
+        logger.error("Fetch failed: ${e.message}", e)
+        throw ServiceException("Failed to fetch data", e)
     }
-
-    return await response.json()
-  } catch (error) {
-    console.error('Fetch failed:', error)
-    throw new Error('Failed to fetch data')
-  }
 }
 
 // BAD: No error handling
-async function fetchData(url) {
-  const response = await fetch(url)
-  return response.json()
+suspend fun fetchData(url: String): ResponseData {
+    val response = httpClient.get(url)
+    return response.body()
 }
 ```
 
-### Async/Await Best Practices
+### Coroutines Best Practices
 
-```typescript
+```kotlin
 // GOOD: Parallel execution when possible
-const [users, markets, stats] = await Promise.all([
-  fetchUsers(),
-  fetchMarkets(),
-  fetchStats()
-])
+val (users, markets, stats) = coroutineScope {
+    Triple(
+        async { fetchUsers() },
+        async { fetchMarkets() },
+        async { fetchStats() }
+    )
+}.let { (u, m, s) -> Triple(u.await(), m.await(), s.await()) }
 
 // BAD: Sequential when unnecessary
-const users = await fetchUsers()
-const markets = await fetchMarkets()
-const stats = await fetchStats()
+val users = fetchUsers()
+val markets = fetchMarkets()
+val stats = fetchStats()
 ```
 
 ### Type Safety
 
-```typescript
-// GOOD: Proper types
-interface Market {
-  id: string
-  name: string
-  status: 'active' | 'resolved' | 'closed'
-  created_at: Date
+```kotlin
+// GOOD: Proper types with sealed classes/enums
+data class Market(
+    val id: String,
+    val name: String,
+    val status: MarketStatus,
+    val createdAt: Instant
+)
+
+enum class MarketStatus {
+    ACTIVE, RESOLVED, CLOSED
 }
 
-function getMarket(id: string): Promise<Market> {
-  // Implementation
+fun getMarket(id: String): Market {
+    // Implementation
 }
 
-// BAD: Using 'any'
-function getMarket(id: any): Promise<any> {
-  // Implementation
-}
-```
-
-## React Best Practices
-
-### Component Structure
-
-```typescript
-// GOOD: Functional component with types
-interface ButtonProps {
-  children: React.ReactNode
-  onClick: () => void
-  disabled?: boolean
-  variant?: 'primary' | 'secondary'
-}
-
-export function Button({
-  children,
-  onClick,
-  disabled = false,
-  variant = 'primary'
-}: ButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`btn btn-${variant}`}
-    >
-      {children}
-    </button>
-  )
-}
-
-// BAD: No types, unclear structure
-export function Button(props) {
-  return <button onClick={props.onClick}>{props.children}</button>
+// BAD: Using Any or unchecked types
+fun getMarket(id: Any): Any {
+    // Implementation
 }
 ```
 
-### Custom Hooks
+## Java Standards
 
-```typescript
-// GOOD: Reusable custom hook
-export function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+### Variable Naming
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value)
-    }, delay)
+```java
+// GOOD: Descriptive names
+final String marketSearchQuery = "election";
+final boolean isUserAuthenticated = true;
+final long totalRevenue = 1000L;
 
-    return () => clearTimeout(handler)
-  }, [value, delay])
+// BAD: Unclear names
+final String q = "election";
+final boolean flag = true;
+final long x = 1000L;
+```
 
-  return debouncedValue
+### Immutability Pattern (CRITICAL)
+
+```java
+// GOOD: Use records (Java 16+) or immutable classes
+public record User(String id, String name, String email) {}
+
+// Creating updated copies with builders or wither methods
+var updatedUser = new User(user.id(), "New Name", user.email());
+
+// Use List.of / List.copyOf for immutable collections
+var updatedList = Stream.concat(items.stream(), Stream.of(newItem))
+    .toList();
+
+// BAD: Mutable state
+user.setName("New Name");  // BAD
+items.add(newItem);        // BAD
+```
+
+### Error Handling
+
+```java
+// GOOD: Comprehensive error handling
+public ResponseData fetchData(String url) {
+    try {
+        var response = httpClient.send(request, BodyHandlers.ofString());
+
+        if (response.statusCode() >= 400) {
+            throw new HttpException("HTTP %d: %s".formatted(response.statusCode(), response.body()));
+        }
+
+        return objectMapper.readValue(response.body(), ResponseData.class);
+    } catch (HttpException e) {
+        logger.error("Fetch failed: {}", e.getMessage(), e);
+        throw new ServiceException("Failed to fetch data", e);
+    }
 }
-
-// Usage
-const debouncedQuery = useDebounce(searchQuery, 500)
 ```
 
-### State Management
+### CompletableFuture Best Practices
 
-```typescript
-// GOOD: Proper state updates
-const [count, setCount] = useState(0)
+```java
+// GOOD: Parallel execution when possible
+var usersFuture = CompletableFuture.supplyAsync(() -> fetchUsers());
+var marketsFuture = CompletableFuture.supplyAsync(() -> fetchMarkets());
+var statsFuture = CompletableFuture.supplyAsync(() -> fetchStats());
 
-// Functional update for state based on previous state
-setCount(prev => prev + 1)
+CompletableFuture.allOf(usersFuture, marketsFuture, statsFuture).join();
 
-// BAD: Direct state reference
-setCount(count + 1)  // Can be stale in async scenarios
-```
+var users = usersFuture.join();
+var markets = marketsFuture.join();
+var stats = statsFuture.join();
 
-### Conditional Rendering
-
-```typescript
-// GOOD: Clear conditional rendering
-{isLoading && <Spinner />}
-{error && <ErrorMessage error={error} />}
-{data && <DataDisplay data={data} />}
-
-// BAD: Ternary hell
-{isLoading ? <Spinner /> : error ? <ErrorMessage error={error} /> : data ? <DataDisplay data={data} /> : null}
+// BAD: Sequential when unnecessary
+var users = fetchUsers();
+var markets = fetchMarkets();
+var stats = fetchStats();
 ```
 
 ## API Design Standards
@@ -257,61 +251,57 @@ GET /api/markets?status=active&limit=10&offset=0
 
 ### Response Format
 
-```typescript
+```kotlin
 // GOOD: Consistent response structure
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-  meta?: {
-    total: number
-    page: number
-    limit: number
-  }
-}
+data class ApiResponse<T>(
+    val success: Boolean,
+    val data: T? = null,
+    val error: String? = null,
+    val meta: PageMeta? = null
+)
+
+data class PageMeta(
+    val total: Long,
+    val page: Int,
+    val limit: Int
+)
 
 // Success response
-return NextResponse.json({
-  success: true,
-  data: markets,
-  meta: { total: 100, page: 1, limit: 10 }
-})
+ResponseEntity.ok(
+    ApiResponse(success = true, data = markets, meta = PageMeta(total = 100, page = 1, limit = 10))
+)
 
 // Error response
-return NextResponse.json({
-  success: false,
-  error: 'Invalid request'
-}, { status: 400 })
+ResponseEntity.badRequest().body(
+    ApiResponse<Nothing>(success = false, error = "Invalid request")
+)
 ```
 
 ### Input Validation
 
-```typescript
-import { z } from 'zod'
+```kotlin
+// GOOD: Schema validation with Jakarta Validation
+data class CreateMarketRequest(
+    @field:NotBlank
+    @field:Size(min = 1, max = 200)
+    val name: String,
 
-// GOOD: Schema validation
-const CreateMarketSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().min(1).max(2000),
-  endDate: z.string().datetime(),
-  categories: z.array(z.string()).min(1)
-})
+    @field:NotBlank
+    @field:Size(min = 1, max = 2000)
+    val description: String,
 
-export async function POST(request: Request) {
-  const body = await request.json()
+    @field:Future
+    val endDate: Instant,
 
-  try {
-    const validated = CreateMarketSchema.parse(body)
-    // Proceed with validated data
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({
-        success: false,
-        error: 'Validation failed',
-        details: error.errors
-      }, { status: 400 })
-    }
-  }
+    @field:NotEmpty
+    val categories: List<String>
+)
+
+@PostMapping("/api/markets")
+fun createMarket(@Valid @RequestBody request: CreateMarketRequest): ResponseEntity<ApiResponse<Market>> {
+    // Validation is handled automatically by Spring
+    val market = marketService.create(request)
+    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse(success = true, data = market))
 }
 ```
 
@@ -321,43 +311,54 @@ export async function POST(request: Request) {
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   ├── markets/           # Market pages
-│   └── (auth)/           # Auth pages (route groups)
-├── components/            # React components
-│   ├── ui/               # Generic UI components
-│   ├── forms/            # Form components
-│   └── layouts/          # Layout components
-├── hooks/                # Custom React hooks
-├── lib/                  # Utilities and configs
-│   ├── api/             # API clients
-│   ├── utils/           # Helper functions
-│   └── constants/       # Constants
-├── types/                # TypeScript types
-└── styles/              # Global styles
+├── main/
+│   ├── kotlin/com/example/app/
+│   │   ├── config/              # Spring configuration
+│   │   ├── market/              # Market feature
+│   │   │   ├── MarketController.kt
+│   │   │   ├── MarketService.kt
+│   │   │   ├── MarketRepository.kt
+│   │   │   ├── Market.kt        # Entity/domain model
+│   │   │   └── MarketDto.kt     # Request/response DTOs
+│   │   ├── auth/                # Auth feature
+│   │   └── common/              # Shared utilities
+│   │       ├── exception/       # Custom exceptions
+│   │       ├── util/            # Helper functions
+│   │       └── dto/             # Shared DTOs
+│   └── resources/
+│       ├── application.yml
+│       └── db/migration/        # Flyway migrations
+└── test/
+    └── kotlin/com/example/app/
+        ├── market/
+        │   ├── MarketControllerTest.kt
+        │   ├── MarketServiceTest.kt
+        │   └── MarketRepositoryTest.kt
+        └── integration/
 ```
 
 ### File Naming
 
 ```
-components/Button.tsx          # PascalCase for components
-hooks/useAuth.ts              # camelCase with 'use' prefix
-lib/formatDate.ts             # camelCase for utilities
-types/market.types.ts         # camelCase with .types suffix
+MarketController.kt          # PascalCase for classes
+MarketService.kt             # PascalCase for classes
+MarketRepository.kt          # PascalCase for interfaces/classes
+MarketDto.kt                 # PascalCase with Dto suffix
+DateUtils.kt                 # PascalCase for utility classes
+market-schema.graphql         # kebab-case for non-Kotlin resources
 ```
 
 ## Comments & Documentation
 
 ### When to Comment
 
-```typescript
+```kotlin
 // GOOD: Explain WHY, not WHAT
 // Use exponential backoff to avoid overwhelming the API during outages
-const delay = Math.min(1000 * Math.pow(2, retryCount), 30000)
+val delay = minOf(1000L * 2.0.pow(retryCount).toLong(), 30_000L)
 
-// Deliberately using mutation here for performance with large arrays
-items.push(newItem)
+// Deliberately using mutable list here for performance with large datasets
+val items = mutableListOf<Item>()
 
 // BAD: Stating the obvious
 // Increment counter by 1
@@ -367,112 +368,99 @@ count++
 name = user.name
 ```
 
-### JSDoc for Public APIs
+### KDoc for Public APIs
 
-```typescript
+```kotlin
 /**
  * Searches markets using semantic similarity.
  *
- * @param query - Natural language search query
- * @param limit - Maximum number of results (default: 10)
- * @returns Array of markets sorted by similarity score
- * @throws {Error} If OpenAI API fails or Redis unavailable
+ * @param query Natural language search query
+ * @param limit Maximum number of results (default: 10)
+ * @return List of markets sorted by similarity score
+ * @throws ServiceException If embedding API fails or database is unavailable
  *
- * @example
- * ```typescript
- * const results = await searchMarkets('election', 5)
- * console.log(results[0].name) // "Trump vs Biden"
+ * @sample
  * ```
 
+* val results = searchMarkets("election", 5)
+* println(results[0].name) // "Trump vs Biden"
+* ```
+
 */
-export async function searchMarkets(
-query: string,
-limit: number = 10
-): Promise<Market[]> {
+suspend fun searchMarkets(
+query: String,
+limit: Int = 10
+): List<Market> {
 // Implementation
 }
-
 ```
 
 ## Performance Best Practices
 
-### Memoization
+### Caching with Spring Cache
 
-```typescript
-import { useMemo, useCallback } from 'react'
+```kotlin
+@Cacheable("markets", key = "#id")
+fun findMarketById(id: String): Market? {
+    return marketRepository.findById(id).orElse(null)
+}
 
-// GOOD: Memoize expensive computations
-const sortedMarkets = useMemo(() => {
-  return markets.sort((a, b) => b.volume - a.volume)
-}, [markets])
-
-// GOOD: Memoize callbacks
-const handleSearch = useCallback((query: string) => {
-  setSearchQuery(query)
-}, [])
+@CacheEvict("markets", key = "#id")
+fun updateMarket(id: String, data: UpdateMarketRequest): Market {
+    // Update logic
+}
 ```
 
-### Lazy Loading
+### Lazy Initialization
 
-```typescript
-import { lazy, Suspense } from 'react'
-
-// GOOD: Lazy load heavy components
-const HeavyChart = lazy(() => import('./HeavyChart'))
-
-export function Dashboard() {
-  return (
-    <Suspense fallback={<Spinner />}>
-      <HeavyChart />
-    </Suspense>
-  )
+```kotlin
+// GOOD: Lazy initialization for expensive resources
+val heavyResource: ExpensiveService by lazy {
+    ExpensiveService.create()
 }
 ```
 
 ### Database Queries
 
-```typescript
-// GOOD: Select only needed columns
-const { data } = await supabase
-  .from('markets')
-  .select('id, name, status')
-  .limit(10)
+```kotlin
+// GOOD: Select only needed columns with projections
+@Query("SELECT m.id, m.name, m.status FROM Market m WHERE m.status = :status")
+fun findActiveMarketSummaries(@Param("status") status: MarketStatus): List<MarketSummary>
 
 // BAD: Select everything
-const { data } = await supabase
-  .from('markets')
-  .select('*')
+fun findAll(): List<Market>  // Fetches all columns
 ```
 
 ## Testing Standards
 
 ### Test Structure (AAA Pattern)
 
-```typescript
-test('calculates similarity correctly', () => {
-  // Arrange
-  const vector1 = [1, 0, 0]
-  const vector2 = [0, 1, 0]
+```kotlin
+@Test
+fun `calculates similarity correctly`() {
+    // Arrange
+    val vector1 = doubleArrayOf(1.0, 0.0, 0.0)
+    val vector2 = doubleArrayOf(0.0, 1.0, 0.0)
 
-  // Act
-  const similarity = calculateCosineSimilarity(vector1, vector2)
+    // Act
+    val similarity = calculateCosineSimilarity(vector1, vector2)
 
-  // Assert
-  expect(similarity).toBe(0)
-})
+    // Assert
+    assertThat(similarity).isEqualTo(0.0)
+}
 ```
 
 ### Test Naming
 
-```typescript
+```kotlin
 // GOOD: Descriptive test names
-test('returns empty array when no markets match query', () => { })
-test('throws error when OpenAI API key is missing', () => { })
-test('falls back to substring search when Redis unavailable', () => { })
+@Test fun `returns empty list when no markets match query`() { }
+@Test fun `throws exception when API key is missing`() { }
+@Test fun `falls back to substring search when Redis unavailable`() { }
 
 // BAD: Vague test names
-test('works', () => { })
-test('test search', () => { })
+@Test fun `works`() { }
+@Test fun `test search`() { }
 ```
 
 ## Code Smell Detection
@@ -481,40 +469,40 @@ Watch for these anti-patterns:
 
 ### 1. Long Functions
 
-```typescript
+```kotlin
 // BAD: Function > 50 lines
-function processMarketData() {
-  // 100 lines of code
+fun processMarketData() {
+    // 100 lines of code
 }
 
 // GOOD: Split into smaller functions
-function processMarketData() {
-  const validated = validateData()
-  const transformed = transformData(validated)
-  return saveData(transformed)
+fun processMarketData(): ProcessedData {
+    val validated = validateData()
+    val transformed = transformData(validated)
+    return saveData(transformed)
 }
 ```
 
 ### 2. Deep Nesting
 
-```typescript
+```kotlin
 // BAD: 5+ levels of nesting
-if (user) {
-  if (user.isAdmin) {
-    if (market) {
-      if (market.isActive) {
-        if (hasPermission) {
-          // Do something
+if (user != null) {
+    if (user.isAdmin) {
+        if (market != null) {
+            if (market.isActive) {
+                if (hasPermission) {
+                    // Do something
+                }
+            }
         }
-      }
     }
-  }
 }
 
 // GOOD: Early returns
-if (!user) return
+if (user == null) return
 if (!user.isAdmin) return
-if (!market) return
+if (market == null) return
 if (!market.isActive) return
 if (!hasPermission) return
 
@@ -523,17 +511,17 @@ if (!hasPermission) return
 
 ### 3. Magic Numbers
 
-```typescript
+```kotlin
 // BAD: Unexplained numbers
 if (retryCount > 3) { }
-setTimeout(callback, 500)
+delay(500)
 
 // GOOD: Named constants
-const MAX_RETRIES = 3
-const DEBOUNCE_DELAY_MS = 500
+const val MAX_RETRIES = 3
+const val DEBOUNCE_DELAY_MS = 500L
 
 if (retryCount > MAX_RETRIES) { }
-setTimeout(callback, DEBOUNCE_DELAY_MS)
+delay(DEBOUNCE_DELAY_MS)
 ```
 
 **Remember**: Code quality is not negotiable. Clear, maintainable code enables rapid development and confident refactoring.
