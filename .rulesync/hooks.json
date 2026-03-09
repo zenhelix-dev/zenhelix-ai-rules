@@ -3,32 +3,39 @@
   "hooks": {
     "preToolUse": [
       {
+        "type": "command",
         "matcher": "Bash",
         "command": ".rulesync/hooks/git-push-reminder.sh"
       },
       {
+        "type": "command",
         "matcher": "Write|Edit",
         "command": ".rulesync/hooks/suggest-compact.sh"
       }
     ],
     "postToolUse": [
       {
+        "type": "command",
         "matcher": "Write|Edit",
         "command": ".rulesync/hooks/format-check.sh"
       },
       {
+        "type": "command",
         "matcher": "Write|Edit",
         "command": ".rulesync/hooks/quality-gate.sh"
       }
     ],
     "stop": [
       {
+        "type": "command",
         "command": ".rulesync/hooks/session-summary.sh"
       },
       {
+        "type": "command",
         "command": ".rulesync/hooks/cost-tracker.sh"
       },
       {
+        "type": "command",
         "command": ".rulesync/hooks/session-state.sh"
       }
     ]

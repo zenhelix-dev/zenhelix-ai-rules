@@ -299,6 +299,8 @@ class OrderFlowWebClientE2ETest {
 
 ## JaCoCo Configuration
 
+Gradle Kotlin DSL (also applicable to Java projects):
+
 ```kotlin
 tasks.jacocoTestReport {
     reports {

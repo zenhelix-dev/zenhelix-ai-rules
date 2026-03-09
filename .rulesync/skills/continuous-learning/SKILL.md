@@ -126,8 +126,8 @@ if [[ -f "$INSTINCT_FILE" ]]; then
   # Update: increment usage-count, append evidence
   CURRENT_COUNT=$(grep "^usage-count:" "$INSTINCT_FILE" | awk '{print $2}')
   NEW_COUNT=$((CURRENT_COUNT + 1))
-  sed -i '' "s/^usage-count: .*/usage-count: $NEW_COUNT/" "$INSTINCT_FILE"
-  sed -i '' "s/^last-used: .*/last-used: $(date +%Y-%m-%d)/" "$INSTINCT_FILE"
+  sed -i.bak "s/^usage-count: .*/usage-count: $NEW_COUNT/" "$INSTINCT_FILE" && rm -f "$INSTINCT_FILE.bak"
+  sed -i.bak "s/^last-used: .*/last-used: $(date +%Y-%m-%d)/" "$INSTINCT_FILE" && rm -f "$INSTINCT_FILE.bak"
   echo "- $EVIDENCE" >> "$INSTINCT_FILE"
   echo "Updated instinct: $ID (usage-count: $NEW_COUNT)"
 else
@@ -206,13 +206,13 @@ fi
 # Update usage count
 CURRENT_COUNT=$(grep "^usage-count:" "$INSTINCT_FILE" | awk '{print $2}')
 NEW_COUNT=$((CURRENT_COUNT + 1))
-sed -i '' "s/^usage-count: .*/usage-count: $NEW_COUNT/" "$INSTINCT_FILE"
-sed -i '' "s/^last-used: .*/last-used: $(date +%Y-%m-%d)/" "$INSTINCT_FILE"
+sed -i.bak "s/^usage-count: .*/usage-count: $NEW_COUNT/" "$INSTINCT_FILE" && rm -f "$INSTINCT_FILE.bak"
+sed -i.bak "s/^last-used: .*/last-used: $(date +%Y-%m-%d)/" "$INSTINCT_FILE" && rm -f "$INSTINCT_FILE.bak"
 
 # Boost confidence (cap at 0.9)
 CURRENT_CONF=$(grep "^confidence:" "$INSTINCT_FILE" | awk '{print $2}')
 NEW_CONF=$(awk "BEGIN {c = $CURRENT_CONF + $BOOST; print (c > 0.9 ? 0.9 : c)}")
-sed -i '' "s/^confidence: .*/confidence: $NEW_CONF/" "$INSTINCT_FILE"
+sed -i.bak "s/^confidence: .*/confidence: $NEW_CONF/" "$INSTINCT_FILE" && rm -f "$INSTINCT_FILE.bak"
 
 echo "Reinforced: $ID (usage: $NEW_COUNT, confidence: $CURRENT_CONF -> $NEW_CONF)"
 ```

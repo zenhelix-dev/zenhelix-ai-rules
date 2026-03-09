@@ -132,7 +132,7 @@ All 3 attempts must pass. Used for critical paths where consistency matters. Tar
 PASS_COUNT=0
 TOTAL=3
 for i in $(seq 1 $TOTAL); do
-  # Execute eval
+  # Replace eval_passes with actual evaluation command (e.g., ./gradlew test)
   if eval_passes; then
     PASS_COUNT=$((PASS_COUNT + 1))
   fi

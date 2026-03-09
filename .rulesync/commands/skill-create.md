@@ -58,12 +58,10 @@ For each identified pattern, create a SKILL.md file:
 ```markdown
 ---
 name: "<skill-name>"
-version: 1
 description: "<what this skill captures>"
-globs:
-  - "<relevant file patterns>"
-tags:
-  - "<tag>"
+targets: ["claudecode"]
+claudecode:
+  model: sonnet
 ---
 
 # <Skill Name>
@@ -92,12 +90,14 @@ tags:
 
 ### Step 4: Categorize and Place
 
-Organize generated skills by type:
+Place each skill in a flat directory: `.rulesync/skills/{skill-name}/SKILL.md` (no subdirectories within skills/).
 
-- `skills/conventions/` — Commit messages, naming, style
-- `skills/architecture/` — Module structure, layering, patterns
-- `skills/testing/` — Test patterns, frameworks, coverage
-- `skills/workflow/` — Development workflow patterns
+Use naming convention for categorization instead of subdirectories:
+
+- `convention-*` — Commit messages, naming, style (e.g., `convention-commits`)
+- `architecture-*` — Module structure, layering, patterns (e.g., `architecture-entity-repo`)
+- `testing-*` — Test patterns, frameworks, coverage (e.g., `testing-mockk`)
+- `workflow-*` — Development workflow patterns (e.g., `workflow-companion-factory`)
 
 ### Step 5: Review and Confirm
 
@@ -128,10 +128,10 @@ Present all generated skills for review:
 | 4 | companion-factory | Code Style | MEDIUM | 12/20 |
 
 ### Generated Files
-1. skills/conventions/conventional-commits.md
-2. skills/architecture/entity-repo-cochange.md
-3. skills/testing/mockk-testing.md
-4. skills/workflow/companion-factory.md
+1. .rulesync/skills/convention-commits/SKILL.md
+2. .rulesync/skills/architecture-entity-repo/SKILL.md
+3. .rulesync/skills/testing-mockk/SKILL.md
+4. .rulesync/skills/workflow-companion-factory/SKILL.md
 
 ### Approve? [all / 1,2,3 / none]
 ```

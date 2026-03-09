@@ -154,7 +154,7 @@ class UserControllerTest {
     @Autowired
     lateinit var mockMvc: MockMvc
 
-    @MockkBean
+    @MockkBean  // Requires com.ninja-squad:springmockk dependency
     lateinit var userService: UserService
 
     @Autowired
