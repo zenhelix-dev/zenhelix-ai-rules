@@ -1,6 +1,6 @@
 ---
-name: gradle-plugins
-description: "Gradle plugin development: convention plugins, published plugins, testing, composite builds"
+name: gradle-plugins-kotlin
+description: "Gradle Kotlin DSL plugin development: convention plugins, published plugins, testing, composite builds"
 targets: ["claudecode"]
 claudecode:
   model: sonnet

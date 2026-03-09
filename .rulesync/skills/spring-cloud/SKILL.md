@@ -1,6 +1,6 @@
 ---
 name: spring-cloud
-description: "Spring Cloud: Config Server, Gateway, Circuit breaker, Service discovery, Feign"
+description: "Spring Cloud: foundational concepts for Config Server, Gateway, Circuit breaker, Service discovery, Feign"
 targets: ["claudecode"]
 claudecode:
   model: sonnet
@@ -8,21 +8,15 @@ claudecode:
 
 # Spring Cloud
 
+This skill provides foundational concepts. For implementation examples, use `spring-cloud-kotlin` or `spring-cloud-java` skill.
+
 Comprehensive guide for Spring Cloud: Config Server, Gateway, Circuit Breaker, Service Discovery, Feign, and distributed tracing.
 
 ## Spring Cloud Config
 
 ### Config Server Setup
 
-```kotlin
-@SpringBootApplication
-@EnableConfigServer
-class ConfigServerApplication
-
-fun main(args: Array<String>) {
-    runApplication<ConfigServerApplication>(*args)
-}
-```
+Annotate the main application class with `@EnableConfigServer`. Configure Git or native filesystem as the config backend.
 
 ```yaml
 # Config Server application.yml
@@ -62,17 +56,7 @@ spring:
 
 ### Refresh Configuration at Runtime
 
-```kotlin
-@RefreshScope
-@Service
-class FeatureFlagService(
-    @Value("\${app.feature.new-checkout:false}") private val newCheckoutEnabled: Boolean
-) {
-    fun isNewCheckoutEnabled(): Boolean = newCheckoutEnabled
-}
-```
-
-Trigger refresh via actuator: `POST /actuator/refresh`
+Use `@RefreshScope` on beans that need dynamic configuration. Trigger refresh via actuator: `POST /actuator/refresh`.
 
 For bus-based refresh across instances:
 
@@ -90,52 +74,7 @@ Trigger: `POST /actuator/busrefresh`
 
 ## Spring Cloud Gateway
 
-### Route Configuration
-
-#### Kotlin
-
-```kotlin
-@Configuration
-class GatewayConfig {
-
-    @Bean
-    fun routes(builder: RouteLocatorBuilder): RouteLocator =
-        builder.routes()
-            .route("order-service") { r ->
-                r.path("/api/v1/orders/**")
-                    .filters { f ->
-                        f.stripPrefix(0)
-                            .addRequestHeader("X-Gateway", "true")
-                            .circuitBreaker { cb ->
-                                cb.setName("orderServiceCB")
-                                cb.setFallbackUri("forward:/fallback/orders")
-                            }
-                            .retry { retry ->
-                                retry.retries = 3
-                                retry.setStatuses(HttpStatus.SERVICE_UNAVAILABLE)
-                            }
-                    }
-                    .uri("lb://order-service")
-            }
-            .route("user-service") { r ->
-                r.path("/api/v1/users/**")
-                    .filters { f ->
-                        f.stripPrefix(0)
-                            .requestRateLimiter { rl ->
-                                rl.rateLimiter = redisRateLimiter()
-                            }
-                    }
-                    .uri("lb://user-service")
-            }
-            .build()
-
-    @Bean
-    fun redisRateLimiter(): RedisRateLimiter =
-        RedisRateLimiter(10, 20) // 10 requests/sec, burst of 20
-}
-```
-
-#### YAML Configuration
+### Route Configuration (YAML)
 
 ```yaml
 spring:
@@ -164,113 +103,7 @@ spring:
             redis-rate-limiter.burstCapacity: 20
 ```
 
-### Custom Gateway Filter
-
-```kotlin
-@Component
-class AuthGatewayFilterFactory : AbstractGatewayFilterFactory<AuthGatewayFilterFactory.Config>(Config::class.java) {
-
-    override fun apply(config: Config): GatewayFilter =
-        GatewayFilter { exchange, chain ->
-            val token = exchange.request.headers.getFirst(HttpHeaders.AUTHORIZATION)
-            if (token == null || !token.startsWith("Bearer ")) {
-                exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                return@GatewayFilter exchange.response.setComplete()
-            }
-            chain.filter(exchange)
-        }
-
-    class Config
-}
-```
-
-### Global Filters
-
-```kotlin
-@Component
-class LoggingGlobalFilter : GlobalFilter, Ordered {
-
-    private val logger = LoggerFactory.getLogger(javaClass)
-
-    override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
-        val request = exchange.request
-        val requestId = UUID.randomUUID().toString()
-        logger.info("Gateway request: {} {} [{}]", request.method, request.uri.path, requestId)
-
-        val mutatedExchange = exchange.mutate()
-            .request(exchange.request.mutate().header("X-Request-Id", requestId).build())
-            .build()
-
-        val startTime = System.currentTimeMillis()
-        return chain.filter(mutatedExchange).then(Mono.fromRunnable {
-            val duration = System.currentTimeMillis() - startTime
-            logger.info("Gateway response: {} {} [{}] in {}ms",
-                request.method, request.uri.path, requestId, duration)
-        })
-    }
-
-    override fun getOrder(): Int = -1
-}
-```
-
 ## Circuit Breaker with Resilience4j
-
-### Dependencies
-
-```kotlin
-implementation("org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j")
-```
-
-### Kotlin
-
-```kotlin
-@Service
-class PaymentService(
-    private val paymentClient: PaymentClient
-) {
-
-    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
-    @Retry(name = "paymentService")
-    @TimeLimiter(name = "paymentService")
-    suspend fun processPayment(request: PaymentRequest): PaymentResponse =
-        paymentClient.charge(request)
-
-    private suspend fun paymentFallback(
-        request: PaymentRequest,
-        ex: Exception
-    ): PaymentResponse {
-        logger.warn("Payment circuit breaker fallback for order ${request.orderId}: ${ex.message}")
-        return PaymentResponse(
-            status = PaymentStatus.PENDING,
-            message = "Payment processing delayed, will retry"
-        )
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(PaymentService::class.java)
-    }
-}
-```
-
-### Java
-
-```java
-@Service
-public class PaymentService {
-
-    private final PaymentClient paymentClient;
-
-    @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
-    @Retry(name = "paymentService")
-    public PaymentResponse processPayment(PaymentRequest request) {
-        return paymentClient.charge(request);
-    }
-
-    private PaymentResponse paymentFallback(PaymentRequest request, Exception ex) {
-        return new PaymentResponse(PaymentStatus.PENDING, "Payment processing delayed");
-    }
-}
-```
 
 ### Configuration
 
@@ -299,19 +132,13 @@ resilience4j:
         timeoutDuration: 5s
 ```
 
+Use `@CircuitBreaker`, `@Retry`, and `@TimeLimiter` annotations on service methods with `fallbackMethod` for graceful degradation.
+
 ## Service Discovery
 
 ### Eureka Server
 
-```kotlin
-@SpringBootApplication
-@EnableEurekaServer
-class EurekaServerApplication
-
-fun main(args: Array<String>) {
-    runApplication<EurekaServerApplication>(*args)
-}
-```
+Annotate with `@EnableEurekaServer`.
 
 ```yaml
 # Eureka Server
@@ -344,81 +171,7 @@ eureka:
 
 ## OpenFeign Declarative HTTP Clients
 
-### Kotlin
-
-```kotlin
-@FeignClient(
-    name = "payment-service",
-    fallbackFactory = PaymentClientFallbackFactory::class,
-    configuration = [PaymentClientConfig::class]
-)
-interface PaymentClient {
-
-    @PostMapping("/api/v1/payments")
-    fun charge(@RequestBody request: PaymentRequest): PaymentResponse
-
-    @GetMapping("/api/v1/payments/{id}")
-    fun getPayment(@PathVariable id: String): PaymentResponse
-
-    @GetMapping("/api/v1/payments")
-    fun listPayments(
-        @RequestParam("customerId") customerId: String,
-        @RequestParam("page") page: Int,
-        @RequestParam("size") size: Int
-    ): Page<PaymentResponse>
-}
-
-@Component
-class PaymentClientFallbackFactory : FallbackFactory<PaymentClient> {
-
-    private val logger = LoggerFactory.getLogger(javaClass)
-
-    override fun create(cause: Throwable): PaymentClient =
-        object : PaymentClient {
-            override fun charge(request: PaymentRequest): PaymentResponse {
-                logger.error("Fallback for charge: ${cause.message}")
-                return PaymentResponse(status = PaymentStatus.PENDING, message = "Service unavailable")
-            }
-
-            override fun getPayment(id: String): PaymentResponse {
-                throw ServiceUnavailableException("Payment service unavailable")
-            }
-
-            override fun listPayments(customerId: String, page: Int, size: Int): Page<PaymentResponse> =
-                Page.empty()
-        }
-}
-
-@Configuration
-class PaymentClientConfig {
-
-    @Bean
-    fun feignRequestInterceptor(): RequestInterceptor =
-        RequestInterceptor { template ->
-            val auth = SecurityContextHolder.getContext().authentication
-            if (auth != null) {
-                template.header(HttpHeaders.AUTHORIZATION, "Bearer ${(auth.credentials as? String)}")
-            }
-        }
-}
-```
-
-### Java
-
-```java
-@FeignClient(
-    name = "payment-service",
-    fallbackFactory = PaymentClientFallbackFactory.class
-)
-public interface PaymentClient {
-
-    @PostMapping("/api/v1/payments")
-    PaymentResponse charge(@RequestBody PaymentRequest request);
-
-    @GetMapping("/api/v1/payments/{id}")
-    PaymentResponse getPayment(@PathVariable String id);
-}
-```
+Define interfaces annotated with `@FeignClient`. Support fallback factories for circuit breaker integration.
 
 ### Feign Configuration
 
@@ -439,21 +192,7 @@ spring:
 
 ## Load Balancing
 
-```kotlin
-@Configuration
-class LoadBalancerConfig {
-
-    @Bean
-    fun webClientLoadBalanced(builder: WebClient.Builder): WebClient =
-        builder
-            .filter(loadBalancerExchangeFilterFunction())
-            .build()
-
-    @Bean
-    @LoadBalanced
-    fun restTemplate(): RestTemplate = RestTemplate()
-}
-```
+Use `@LoadBalanced` on `RestTemplate` or `WebClient.Builder` beans. Spring Cloud LoadBalancer replaces deprecated Ribbon.
 
 ## Distributed Tracing with Micrometer
 
@@ -471,39 +210,9 @@ logging:
     level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"
 ```
 
-```kotlin
-implementation("io.micrometer:micrometer-tracing-bridge-otel")
-implementation("io.opentelemetry:opentelemetry-exporter-zipkin")
-```
-
 ## Spring Cloud Stream
 
-### Kotlin
-
-```kotlin
-@Configuration
-class StreamConfig {
-
-    @Bean
-    fun orderCreatedConsumer(): Consumer<OrderCreatedEvent> = Consumer { event ->
-        logger.info("Received order created event: ${event.orderId}")
-        // Process event
-    }
-
-    @Bean
-    fun orderStatusSupplier(orderEventService: OrderEventService): Supplier<Flux<OrderStatusEvent>> =
-        Supplier { orderEventService.getStatusEvents() }
-
-    @Bean
-    fun orderTransformer(): Function<OrderCreatedEvent, NotificationEvent> = Function { event ->
-        NotificationEvent(
-            recipient = event.customerId,
-            message = "Order ${event.orderId} has been created",
-            type = NotificationType.EMAIL
-        )
-    }
-}
-```
+Configure function-based bindings (Consumer, Supplier, Function) for event-driven microservices.
 
 ```yaml
 spring:

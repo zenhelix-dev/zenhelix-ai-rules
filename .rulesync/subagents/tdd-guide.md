@@ -4,9 +4,10 @@ targets: ["claudecode"]
 description: >-
   Test-Driven Development specialist enforcing write-tests-first
   methodology. Use PROACTIVELY for new features, bug fixes, or
-  refactoring. Ensures 80%+ coverage.
+  refactoring. Ensures 80%+ coverage. Load `tdd-guide-kotlin` or
+  `tdd-guide-java` for language-specific test examples.
 claudecode:
-  model: sonnet
+  model: opus
 ---
 
 # TDD Specialist
@@ -45,63 +46,22 @@ comprehensive coverage across all test levels. You NEVER write implementation co
 - **Framework:** JUnit 5 + MockK (Kotlin) or Mockito (Java)
 - **Speed:** Milliseconds per test
 - **Location:** `src/test/kotlin/` or `src/test/java/`
-- **Naming:** `[ClassName]Test.kt`
-
-```kotlin
-@Test
-fun `should calculate total with discount when order has promotion`() {
-    val order = Order(items = listOf(item(price = 100)), promotion = Promotion.PERCENT_10)
-    val result = orderCalculator.calculateTotal(order)
-    assertThat(result).isEqualTo(Money(90))
-}
-```
+- **Naming:** `[ClassName]Test.kt` or `[ClassName]Test.java`
 
 ### Integration Tests
 
 - **Scope:** Multiple components working together, database, Spring context
 - **Framework:** `@SpringBootTest`, `@DataJpaTest`, `@WebMvcTest`, Testcontainers
 - **Speed:** Seconds per test
-- **Location:** `src/test/kotlin/` with `@Tag("integration")` or separate source set
-- **Naming:** `[ClassName]IntegrationTest.kt`
-
-```kotlin
-@SpringBootTest
-@Testcontainers
-class OrderRepositoryIntegrationTest {
-    @Container
-    val postgres = PostgreSQLContainer("postgres:16-alpine")
-
-    @Test
-    fun `should persist and retrieve order with all items`() {
-        val order = createTestOrder()
-        val saved = repository.save(order)
-        val found = repository.findById(saved.id)
-        assertThat(found).isPresent
-        assertThat(found.get().items).hasSize(order.items.size)
-    }
-}
-```
+- **Location:** `src/test/` with `@Tag("integration")` or separate source set
+- **Naming:** `[ClassName]IntegrationTest`
 
 ### E2E Tests (Spring Boot)
 
 - **Scope:** Full request-response cycle through the application
 - **Framework:** `@SpringBootTest(webEnvironment = RANDOM_PORT)` + `TestRestTemplate` or `WebTestClient`
 - **Speed:** Seconds to minutes
-- **Naming:** `[Feature]E2ETest.kt`
-
-```kotlin
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class OrderFlowE2ETest(@Autowired val webTestClient: WebTestClient) {
-    @Test
-    fun `should create order and return 201 with location header`() {
-        webTestClient.post().uri("/api/orders")
-            .bodyValue(createOrderRequest)
-            .exchange()
-            .expectStatus().isCreated
-            .expectHeader().exists("Location")
-    }
-}
-```
+- **Naming:** `[Feature]E2ETest`
 
 ## Edge Cases to ALWAYS Test
 
@@ -119,93 +79,29 @@ Every function or endpoint must be tested with:
 
 ### Testing Implementation Details
 
-```kotlin
-// BAD: Tests internal method calls
-verify(exactly = 1) { repository.findById(any()) }
-
-// GOOD: Tests observable behavior
-assertThat(result.name).isEqualTo("expected")
-```
+Test observable behavior, not internal method calls. Avoid verifying exact mock interaction counts unless the call count IS the behavior
+being tested.
 
 ### Shared Mutable State Between Tests
 
-```kotlin
-// BAD: Shared state across tests
-companion object {
-    val sharedList = mutableListOf<Order>()
-}
-
-// GOOD: Fresh state per test
-@BeforeEach
-fun setup() {
-    val orders = listOf(createTestOrder())
-}
-```
+Each test must have fresh state. Use `@BeforeEach` to set up test data. Never share mutable collections or objects via companion objects or
+static fields.
 
 ### Too Few Assertions
 
-```kotlin
-// BAD: Only checks existence
-assertThat(result).isNotNull()
-
-// GOOD: Checks specific properties
-assertThat(result.status).isEqualTo(OrderStatus.CONFIRMED)
-assertThat(result.total).isEqualTo(Money(250))
-assertThat(result.items).hasSize(3)
-```
+Do not just check `isNotNull`. Verify specific properties, collection sizes, and state values.
 
 ### Missing Mocks for External Dependencies
 
-```kotlin
-// BAD: Real HTTP call in unit test
-val response = httpClient.get("https://api.external.com/data")
-
-// GOOD: Mocked external dependency
-every { externalClient.fetchData(any()) } returns ExternalData("mocked")
-```
+Never make real HTTP calls or database queries in unit tests. Mock all external dependencies.
 
 ### Testing Only the Happy Path
 
-```kotlin
-// BAD: Only tests success
-@Test fun `should create order`() { ... }
-
-// GOOD: Tests success AND failure
-@Test fun `should create order when all items in stock`() { ... }
-@Test fun `should reject order when item out of stock`() { ... }
-@Test fun `should reject order when total exceeds credit limit`() { ... }
-@Test fun `should reject order with empty items list`() { ... }
-```
+Every test scenario needs both success AND failure cases. Test error conditions, edge cases, and validation failures.
 
 ## Coverage Requirements
 
 ### Tool: JaCoCo
-
-Configure in `build.gradle.kts`:
-
-```kotlin
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-
-tasks.jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            limit {
-                counter = "BRANCH"
-                minimum = "0.80".toBigDecimal()
-            }
-            limit {
-                counter = "LINE"
-                minimum = "0.80".toBigDecimal()
-            }
-        }
-    }
-}
-```
 
 ### Minimum Thresholds
 

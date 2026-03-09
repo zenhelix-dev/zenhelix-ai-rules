@@ -1,12 +1,14 @@
 ---
 name: flyway
-description: "Flyway: migration naming, versioned/repeatable, callbacks, undo migrations, Spring Boot integration"
+description: "Flyway: migration naming, versioned/repeatable, SQL callbacks, undo migrations, Spring Boot integration, Gradle plugin"
 targets: ["claudecode"]
 claudecode:
   model: haiku
 ---
 
 # Flyway Migration Reference
+
+> This skill provides foundational concepts. For implementation examples, use `flyway-kotlin` or `flyway-java` skill.
 
 ## Migration Naming Convention
 
@@ -160,58 +162,6 @@ SET search_path TO public;
 | beforeValidate      | Before validation                       |
 | afterValidate       | After validation                        |
 
-### Java Callbacks
-
-```kotlin
-// Kotlin
-@Component
-class AfterMigrateCallback : Callback {
-    override fun supports(event: Event, context: Context): Boolean =
-        event == Event.AFTER_MIGRATE
-
-    override fun canHandleInTransaction(event: Event, context: Context): Boolean = true
-
-    override fun handle(event: Event, context: Context) {
-        // Custom logic after migration
-        context.connection.createStatement().use { stmt ->
-            stmt.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_user_stats")
-        }
-    }
-
-    override fun getCallbackName(): String = "afterMigrateCallback"
-}
-```
-
-```java
-// Java
-@Component
-public class AfterMigrateCallback implements Callback {
-    @Override
-    public boolean supports(Event event, Context context) {
-        return event == Event.AFTER_MIGRATE;
-    }
-
-    @Override
-    public boolean canHandleInTransaction(Event event, Context context) {
-        return true;
-    }
-
-    @Override
-    public void handle(Event event, Context context) {
-        try (var stmt = context.getConnection().createStatement()) {
-            stmt.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_user_stats");
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to refresh materialized view", e);
-        }
-    }
-
-    @Override
-    public String getCallbackName() {
-        return "afterMigrateCallback";
-    }
-}
-```
-
 ## Baseline for Existing Databases
 
 When adopting Flyway on an existing database:
@@ -278,68 +228,6 @@ flyway {
 ./gradlew flywayClean      # Drop all objects (DEV ONLY)
 ./gradlew flywayBaseline   # Baseline existing database
 ./gradlew flywayRepair     # Fix schema history table
-```
-
-## Java-Based Migrations
-
-For complex migrations that need procedural logic:
-
-```kotlin
-// Kotlin - V4__migrate_user_data.kt
-package db.migration
-
-import org.flywaydb.core.api.migration.BaseJavaMigration
-import org.flywaydb.core.api.migration.Context
-
-class V4__migrate_user_data : BaseJavaMigration() {
-    override fun migrate(context: Context) {
-        context.connection.createStatement().use { stmt ->
-            val rs = stmt.executeQuery("SELECT id, full_name FROM users WHERE first_name IS NULL")
-            val update = context.connection.prepareStatement(
-                "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?"
-            )
-            while (rs.next()) {
-                val parts = rs.getString("full_name").split(" ", limit = 2)
-                update.setString(1, parts[0])
-                update.setString(2, parts.getOrElse(1) { "" })
-                update.setLong(3, rs.getLong("id"))
-                update.addBatch()
-            }
-            update.executeBatch()
-        }
-    }
-}
-```
-
-```java
-// Java - V4__migrate_user_data.java
-package db.migration;
-
-import org.flywaydb.core.api.migration.BaseJavaMigration;
-import org.flywaydb.core.api.migration.Context;
-import java.sql.*;
-
-public class V4__migrate_user_data extends BaseJavaMigration {
-    @Override
-    public void migrate(Context context) throws Exception {
-        try (Statement stmt = context.getConnection().createStatement()) {
-            ResultSet rs = stmt.executeQuery(
-                "SELECT id, full_name FROM users WHERE first_name IS NULL"
-            );
-            PreparedStatement update = context.getConnection().prepareStatement(
-                "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?"
-            );
-            while (rs.next()) {
-                String[] parts = rs.getString("full_name").split(" ", 2);
-                update.setString(1, parts[0]);
-                update.setString(2, parts.length > 1 ? parts[1] : "");
-                update.setLong(3, rs.getLong("id"));
-                update.addBatch();
-            }
-            update.executeBatch();
-        }
-    }
-}
 ```
 
 ## Best Practices

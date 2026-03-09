@@ -1,6 +1,6 @@
 ---
-name: gradle-config
-description: "Gradle configuration: multi-module, dependency management, version catalogs, build cache, optimization"
+name: gradle-config-kotlin
+description: "Gradle Kotlin DSL configuration: multi-module, dependency management, version catalogs, build cache, optimization"
 targets: ["claudecode"]
 claudecode:
   model: haiku

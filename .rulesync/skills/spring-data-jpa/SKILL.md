@@ -1,6 +1,6 @@
 ---
 name: spring-data-jpa
-description: "Spring Data JPA: repositories, specifications, projections, auditing, custom queries"
+description: "Spring Data JPA foundational concepts: repository patterns, specifications, projections, auditing, query optimization, transaction management"
 targets: ["claudecode"]
 claudecode:
   model: sonnet
@@ -8,449 +8,100 @@ claudecode:
 
 # Spring Data JPA
 
+This skill provides foundational concepts. For implementation examples, use `spring-data-jpa-kotlin` or `spring-data-jpa-java` skill.
+
 Comprehensive guide for Spring Data JPA: repositories, specifications, projections, auditing, and query optimization.
 
 ## Entity Design
 
-### Kotlin
+JPA entities map Java/Kotlin classes to database tables. Key annotations:
 
-```kotlin
-@Entity
-@Table(name = "orders")
-class Order(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
+| Annotation                          | Purpose                                      |
+|-------------------------------------|----------------------------------------------|
+| `@Entity`                           | Marks class as JPA entity                    |
+| `@Table`                            | Specifies table name                         |
+| `@Id`                               | Primary key field                            |
+| `@GeneratedValue`                   | ID generation strategy                       |
+| `@Column`                           | Column mapping (nullable, precision, etc.)   |
+| `@Enumerated`                       | Enum mapping (STRING preferred over ORDINAL) |
+| `@OneToMany`, `@ManyToOne`          | Relationship mapping                         |
+| `@CreatedDate`, `@LastModifiedDate` | Auditing timestamps                          |
 
-    @Column(nullable = false)
-    val customerId: String,
+Best practices:
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    var status: OrderStatus = OrderStatus.CREATED,
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    val totalAmount: BigDecimal,
-
-    @OneToMany(mappedBy = "order", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val items: MutableList<OrderItem> = mutableListOf(),
-
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
-    var createdAt: Instant = Instant.now(),
-
-    @LastModifiedDate
-    @Column(nullable = false)
-    var updatedAt: Instant = Instant.now()
-) {
-    fun addItem(item: OrderItem) {
-        items.add(item)
-        item.order = this
-    }
-}
-
-@Entity
-@Table(name = "order_items")
-class OrderItem(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    var order: Order? = null,
-
-    @Column(nullable = false)
-    val productId: String,
-
-    @Column(nullable = false)
-    val quantity: Int,
-
-    @Column(nullable = false, precision = 10, scale = 2)
-    val unitPrice: BigDecimal
-)
-```
-
-### Java
-
-```java
-@Entity
-@Table(name = "orders")
-public class Order {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false)
-    private String customerId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private OrderStatus status = OrderStatus.CREATED;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal totalAmount;
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderItem> items = new ArrayList<>();
-
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @LastModifiedDate
-    @Column(nullable = false)
-    private Instant updatedAt;
-
-    // Getters, equals/hashCode by id
-}
-```
+- Always use `FetchType.LAZY` for `@OneToMany` and `@ManyToMany`
+- Use `CascadeType.ALL` + `orphanRemoval = true` for owned collections
+- Use `mappedBy` on the non-owning side of relationships
 
 ## Repository Interface
 
-### Kotlin
+Spring Data JPA repositories provide CRUD and query methods through interface declarations:
 
-```kotlin
-interface OrderRepository : JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
-
-    // Derived query methods
-    fun findByCustomerId(customerId: String): List<Order>
-    fun findByStatus(status: OrderStatus, pageable: Pageable): Page<Order>
-    fun existsByCustomerIdAndStatus(customerId: String, status: OrderStatus): Boolean
-    fun countByStatus(status: OrderStatus): Long
-
-    // JPQL queries
-    @Query("SELECT o FROM Order o WHERE o.status = :status AND o.createdAt > :since")
-    fun findRecentByStatus(
-        @Param("status") status: OrderStatus,
-        @Param("since") since: Instant
-    ): List<Order>
-
-    // Native SQL queries
-    @Query(
-        value = "SELECT customer_id, COUNT(*) as order_count, SUM(total_amount) as total " +
-                "FROM orders WHERE status = :status GROUP BY customer_id",
-        nativeQuery = true
-    )
-    fun getCustomerOrderStats(@Param("status") status: String): List<CustomerOrderStatsProjection>
-
-    // Modifying queries
-    @Modifying
-    @Query("UPDATE Order o SET o.status = :status WHERE o.id IN :ids")
-    fun updateStatusByIds(@Param("ids") ids: List<Long>, @Param("status") status: OrderStatus): Int
-}
-```
-
-### Java
-
-```java
-public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
-
-    List<Order> findByCustomerId(String customerId);
-    Page<Order> findByStatus(OrderStatus status, Pageable pageable);
-    boolean existsByCustomerIdAndStatus(String customerId, OrderStatus status);
-
-    @Query("SELECT o FROM Order o WHERE o.status = :status AND o.createdAt > :since")
-    List<Order> findRecentByStatus(@Param("status") OrderStatus status, @Param("since") Instant since);
-
-    @Modifying
-    @Query("UPDATE Order o SET o.status = :status WHERE o.id IN :ids")
-    int updateStatusByIds(@Param("ids") List<Long> ids, @Param("status") OrderStatus status);
-}
-```
+- `JpaRepository<T, ID>` — CRUD + pagination + sorting
+- `JpaSpecificationExecutor<T>` — dynamic queries via Specifications
+- Derived query methods — auto-generated from method names
+- `@Query` — JPQL or native SQL queries
+- `@Modifying` — for UPDATE/DELETE queries
 
 ## Specifications for Dynamic Queries
 
-### Kotlin
+Specifications enable type-safe, composable query criteria. Use `Specification.where()` and `.and()` / `.or()` to combine.
 
-```kotlin
-object OrderSpecifications {
-
-    fun hasCustomerId(customerId: String?): Specification<Order> =
-        Specification { root, _, cb ->
-            customerId?.let { cb.equal(root.get<String>("customerId"), it) }
-        }
-
-    fun hasStatus(status: OrderStatus?): Specification<Order> =
-        Specification { root, _, cb ->
-            status?.let { cb.equal(root.get<OrderStatus>("status"), it) }
-        }
-
-    fun createdAfter(since: Instant?): Specification<Order> =
-        Specification { root, _, cb ->
-            since?.let { cb.greaterThan(root.get("createdAt"), it) }
-        }
-
-    fun totalAmountBetween(min: BigDecimal?, max: BigDecimal?): Specification<Order> =
-        Specification { root, _, cb ->
-            val predicates = mutableListOf<Predicate>()
-            min?.let { predicates.add(cb.greaterThanOrEqualTo(root.get("totalAmount"), it)) }
-            max?.let { predicates.add(cb.lessThanOrEqualTo(root.get("totalAmount"), it)) }
-            cb.and(*predicates.toTypedArray())
-        }
-}
-
-// Usage in service
-@Service
-class OrderService(private val orderRepository: OrderRepository) {
-
-    fun search(filter: OrderFilter, pageable: Pageable): Page<Order> {
-        val spec = Specification.where(OrderSpecifications.hasCustomerId(filter.customerId))
-            .and(OrderSpecifications.hasStatus(filter.status))
-            .and(OrderSpecifications.createdAfter(filter.since))
-            .and(OrderSpecifications.totalAmountBetween(filter.minAmount, filter.maxAmount))
-        return orderRepository.findAll(spec, pageable)
-    }
-}
-```
-
-### Java
-
-```java
-public class OrderSpecifications {
-
-    public static Specification<Order> hasCustomerId(String customerId) {
-        return (root, query, cb) ->
-            customerId != null ? cb.equal(root.get("customerId"), customerId) : null;
-    }
-
-    public static Specification<Order> hasStatus(OrderStatus status) {
-        return (root, query, cb) ->
-            status != null ? cb.equal(root.get("status"), status) : null;
-    }
-
-    public static Specification<Order> createdAfter(Instant since) {
-        return (root, query, cb) ->
-            since != null ? cb.greaterThan(root.get("createdAt"), since) : null;
-    }
-}
-```
+Best for search/filter endpoints where criteria are optional and combined dynamically.
 
 ## Projections
 
 ### Interface-Based Projection
 
-```kotlin
-// Closed projection — only specified fields are fetched
-interface OrderSummary {
-    val id: Long
-    val customerId: String
-    val status: OrderStatus
-    val totalAmount: BigDecimal
-    val createdAt: Instant
-}
-
-// Open projection with SpEL
-interface OrderWithItemCount {
-    val id: Long
-    val customerId: String
-
-    @get:Value("#{target.items.size()}")
-    val itemCount: Int
-}
-
-// Usage in repository
-interface OrderRepository : JpaRepository<Order, Long> {
-    fun findSummaryByStatus(status: OrderStatus): List<OrderSummary>
-}
-```
+Closed projections fetch only specified fields. Open projections allow SpEL expressions.
 
 ### Class-Based Projection (DTO)
 
-```kotlin
-data class OrderDto(
-    val id: Long,
-    val customerId: String,
-    val totalAmount: BigDecimal,
-    val status: OrderStatus
-)
-
-interface OrderRepository : JpaRepository<Order, Long> {
-    @Query("SELECT new com.example.dto.OrderDto(o.id, o.customerId, o.totalAmount, o.status) FROM Order o WHERE o.status = :status")
-    fun findDtosByStatus(@Param("status") status: OrderStatus): List<OrderDto>
-}
-```
+Use constructor expressions in JPQL: `SELECT new com.example.dto.Dto(...)`.
 
 ### Dynamic Projections
 
-```kotlin
-interface OrderRepository : JpaRepository<Order, Long> {
-    fun <T> findById(id: Long, type: Class<T>): T?
-}
-
-// Usage
-val summary: OrderSummary? = orderRepository.findById(1L, OrderSummary::class.java)
-val full: Order? = orderRepository.findById(1L, Order::class.java)
-```
+Pass projection type as method parameter: `<T> findById(Long id, Class<T> type)`.
 
 ## EntityGraph (N+1 Prevention)
 
-```kotlin
-@Entity
-@NamedEntityGraph(
-    name = "Order.withItems",
-    attributeNodes = [NamedAttributeNode("items")]
-)
-class Order(/* ... */)
+`@EntityGraph` eagerly fetches specified associations in a single query, preventing N+1 problems.
 
-interface OrderRepository : JpaRepository<Order, Long> {
+Options:
 
-    @EntityGraph("Order.withItems")
-    fun findWithItemsById(id: Long): Order?
-
-    // Ad-hoc entity graph
-    @EntityGraph(attributePaths = ["items", "items.product"])
-    fun findWithItemsAndProductsByCustomerId(customerId: String): List<Order>
-
-    // Override default method with entity graph
-    @EntityGraph(attributePaths = ["items"])
-    override fun findAll(pageable: Pageable): Page<Order>
-}
-```
+- `@NamedEntityGraph` on entity class — reusable named graphs
+- `@EntityGraph(attributePaths = [...])` on repository methods — ad-hoc graphs
 
 ## Auditing
 
-### Configuration
+Enable with `@EnableJpaAuditing`. Use `@CreatedDate`, `@LastModifiedDate`, `@CreatedBy`, `@LastModifiedBy`.
 
-```kotlin
-@Configuration
-@EnableJpaAuditing
-class JpaAuditingConfig {
+Provide `AuditorAware<String>` bean for `@CreatedBy` / `@LastModifiedBy` support.
 
-    @Bean
-    fun auditorProvider(): AuditorAware<String> =
-        AuditorAware {
-            Optional.ofNullable(SecurityContextHolder.getContext().authentication)
-                .map { it.name }
-        }
-}
-```
-
-### Auditable Base Entity
-
-```kotlin
-@MappedSuperclass
-@EntityListeners(AuditingEntityListener::class)
-abstract class AuditableEntity(
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
-    var createdAt: Instant = Instant.now(),
-
-    @LastModifiedDate
-    @Column(nullable = false)
-    var updatedAt: Instant = Instant.now(),
-
-    @CreatedBy
-    @Column(updatable = false)
-    var createdBy: String? = null,
-
-    @LastModifiedBy
-    var updatedBy: String? = null
-)
-
-@Entity
-@Table(name = "orders")
-class Order(
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
-    val customerId: String,
-    val totalAmount: BigDecimal
-) : AuditableEntity()
-```
+Create a `@MappedSuperclass` base entity with audit fields for reuse across entities.
 
 ## Pagination
 
-### Kotlin
-
-```kotlin
-@GetMapping
-fun listOrders(
-    @RequestParam(defaultValue = "0") page: Int,
-    @RequestParam(defaultValue = "20") size: Int,
-    @RequestParam(defaultValue = "createdAt,desc") sort: String
-): Page<OrderResponse> {
-    val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-    return orderRepository.findAll(pageable).map { it.toResponse() }
-}
-```
-
-### Slice for Infinite Scroll
-
-```kotlin
-interface OrderRepository : JpaRepository<Order, Long> {
-    fun findByCustomerId(customerId: String, pageable: Pageable): Slice<Order>
-}
-```
+- `Pageable` / `PageRequest` — page-based pagination
+- `Page<T>` — includes total count (extra COUNT query)
+- `Slice<T>` — no total count (better for infinite scroll)
+- `Sort` — ordering
 
 ## Custom Repository Implementation
 
-### Kotlin
+For queries too complex for derived methods or JPQL:
 
-```kotlin
-interface OrderRepositoryCustom {
-    fun findOrdersWithComplexCriteria(filter: ComplexFilter): List<Order>
-}
-
-class OrderRepositoryCustomImpl(
-    private val entityManager: EntityManager
-) : OrderRepositoryCustom {
-
-    override fun findOrdersWithComplexCriteria(filter: ComplexFilter): List<Order> {
-        val cb = entityManager.criteriaBuilder
-        val query = cb.createQuery(Order::class.java)
-        val root = query.from(Order::class.java)
-
-        val predicates = mutableListOf<Predicate>()
-        filter.customerId?.let { predicates.add(cb.equal(root.get<String>("customerId"), it)) }
-        filter.statuses?.let { predicates.add(root.get<OrderStatus>("status").`in`(it)) }
-
-        query.where(*predicates.toTypedArray())
-        query.orderBy(cb.desc(root.get<Instant>("createdAt")))
-
-        return entityManager.createQuery(query)
-            .setMaxResults(filter.limit)
-            .resultList
-    }
-}
-
-// Combine with standard repository
-interface OrderRepository : JpaRepository<Order, Long>,
-    JpaSpecificationExecutor<Order>,
-    OrderRepositoryCustom
-```
+1. Define custom interface (`OrderRepositoryCustom`)
+2. Implement it (`OrderRepositoryCustomImpl`) using `EntityManager`
+3. Extend custom interface in main repository
 
 ## Transaction Management
 
-```kotlin
-@Service
-class OrderService(
-    private val orderRepository: OrderRepository,
-    private val inventoryService: InventoryService,
-    private val paymentService: PaymentService
-) {
+Key annotations:
 
-    @Transactional
-    fun createOrder(request: CreateOrderRequest): OrderResponse {
-        val order = orderRepository.save(request.toEntity())
-        inventoryService.reserve(order.items)
-        paymentService.charge(order.customerId, order.totalAmount)
-        return order.toResponse()
-    }
-
-    @Transactional(readOnly = true)
-    fun findById(id: Long): OrderResponse? =
-        orderRepository.findById(id).orElse(null)?.toResponse()
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    fun updateStatusIndependently(id: Long, status: OrderStatus) {
-        orderRepository.findById(id).ifPresent { order ->
-            order.status = status
-            orderRepository.save(order)
-        }
-    }
-}
-```
+- `@Transactional` — wraps method in transaction
+- `@Transactional(readOnly = true)` — enables query optimizations
+- `@Transactional(propagation = Propagation.REQUIRES_NEW)` — independent transaction
 
 ## Best Practices
 

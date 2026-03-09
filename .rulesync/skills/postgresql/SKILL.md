@@ -1,12 +1,14 @@
 ---
 name: postgresql
-description: "PostgreSQL: data types, indexing, EXPLAIN, RLS, partitioning, read-only schema analysis"
+description: "PostgreSQL: data types, indexing, EXPLAIN, RLS, partitioning, diagnostic queries, read-only schema analysis"
 targets: ["claudecode"]
 claudecode:
   model: haiku
 ---
 
 # PostgreSQL Reference
+
+> This skill provides foundational concepts. For implementation examples, use `postgresql-kotlin` or `postgresql-java` skill.
 
 ## Common Data Types
 
@@ -155,20 +157,6 @@ CREATE POLICY insert_own ON documents
   WITH CHECK (user_id = current_setting('app.current_user_id')::bigint);
 ```
 
-### Setting Context for RLS
-
-```kotlin
-// In your application, set the session variable before queries
-dslContext.execute("SET LOCAL app.current_user_id = '${userId}'")
-```
-
-```java
-// Java/JDBC
-connection.createStatement().execute(
-    "SET LOCAL app.current_user_id = '" + userId + "'"
-);
-```
-
 ## Partitioning
 
 ### When to Use
@@ -244,34 +232,6 @@ SELECT * FROM orders ORDER BY id LIMIT 20 OFFSET 10000;
 ```sql
 -- Client passes the last seen ID
 SELECT * FROM orders WHERE id > :last_seen_id ORDER BY id LIMIT 20;
-```
-
-```kotlin
-// Kotlin/Spring example
-@GetMapping("/orders")
-fun getOrders(@RequestParam cursor: Long?, @RequestParam size: Int = 20): Page {
-    val orders = if (cursor != null) {
-        orderRepository.findByIdGreaterThanOrderByIdAsc(cursor, PageRequest.of(0, size))
-    } else {
-        orderRepository.findAllByOrderByIdAsc(PageRequest.of(0, size))
-    }
-    val nextCursor = orders.lastOrNull()?.id
-    return Page(data = orders, nextCursor = nextCursor)
-}
-```
-
-```java
-// Java/Spring example
-@GetMapping("/orders")
-public Page getOrders(
-        @RequestParam(required = false) Long cursor,
-        @RequestParam(defaultValue = "20") int size) {
-    List<Order> orders = (cursor != null)
-        ? orderRepository.findByIdGreaterThanOrderByIdAsc(cursor, PageRequest.of(0, size))
-        : orderRepository.findAllByOrderByIdAsc(PageRequest.of(0, size));
-    Long nextCursor = orders.isEmpty() ? null : orders.get(orders.size() - 1).getId();
-    return new Page(orders, nextCursor);
-}
 ```
 
 ## Configuration Tuning

@@ -1,12 +1,14 @@
 ---
 name: spring-core
-description: "Spring Core: dependency injection, configuration, profiles, properties, actuator, auto-configuration"
+description: "Spring Core foundational concepts: dependency injection principles, configuration patterns, profiles, properties binding, actuator, auto-configuration"
 targets: ["claudecode"]
 claudecode:
   model: sonnet
 ---
 
 # Spring Core
+
+This skill provides foundational concepts. For implementation examples, use `spring-core-kotlin` or `spring-core-java` skill.
 
 Comprehensive guide for Spring Framework core concepts: dependency injection, configuration, profiles, properties, actuator, and
 auto-configuration.
@@ -15,188 +17,35 @@ auto-configuration.
 
 Use stereotype annotations to mark classes for component scanning. Each conveys intent about the layer the class belongs to.
 
-### Kotlin
-
-```kotlin
-@Component
-class EmailValidator
-
-@Service
-class OrderService(
-    private val orderRepository: OrderRepository,
-    private val paymentGateway: PaymentGateway
-)
-
-@Repository
-class JpaOrderRepository(
-    private val entityManager: EntityManager
-) : OrderRepository
-
-@Controller
-class OrderController(
-    private val orderService: OrderService
-)
-```
-
-### Java
-
-```java
-@Component
-public class EmailValidator { }
-
-@Service
-public class OrderService {
-    private final OrderRepository orderRepository;
-    private final PaymentGateway paymentGateway;
-
-    public OrderService(OrderRepository orderRepository, PaymentGateway paymentGateway) {
-        this.orderRepository = orderRepository;
-        this.paymentGateway = paymentGateway;
-    }
-}
-
-@Repository
-public class JpaOrderRepository implements OrderRepository {
-    private final EntityManager entityManager;
-
-    public JpaOrderRepository(EntityManager entityManager) {
-        this.entityManager = entityManager;
-    }
-}
-```
+| Annotation        | Layer          | Purpose                                        |
+|-------------------|----------------|------------------------------------------------|
+| `@Component`      | Generic        | General-purpose Spring-managed bean            |
+| `@Service`        | Business logic | Service layer classes                          |
+| `@Repository`     | Data access    | DAO classes, enables exception translation     |
+| `@Controller`     | Web            | MVC controllers (with view resolution)         |
+| `@RestController` | Web            | REST controllers (@Controller + @ResponseBody) |
 
 ## Dependency Injection
 
 **Always prefer constructor injection.** It makes dependencies explicit, enables immutability, and simplifies testing.
 
-### Kotlin
+Principles:
 
-```kotlin
-// PREFERRED: Constructor injection (automatic for single constructor)
-@Service
-class UserService(
-    private val userRepository: UserRepository,
-    private val passwordEncoder: PasswordEncoder
-) {
-    fun findById(id: Long): User? = userRepository.findById(id).orElse(null)
-}
-
-// Using @Qualifier when multiple implementations exist
-@Service
-class NotificationService(
-    @Qualifier("email") private val emailSender: MessageSender,
-    @Qualifier("sms") private val smsSender: MessageSender
-)
-```
-
-### Java
-
-```java
-// PREFERRED: Constructor injection
-@Service
-public class UserService {
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
-}
-
-// Using @Qualifier
-@Service
-public class NotificationService {
-    private final MessageSender emailSender;
-    private final MessageSender smsSender;
-
-    public NotificationService(
-            @Qualifier("email") MessageSender emailSender,
-            @Qualifier("sms") MessageSender smsSender) {
-        this.emailSender = emailSender;
-        this.smsSender = smsSender;
-    }
-}
-```
-
-### Anti-patterns to Avoid
-
-```kotlin
-// BAD: Field injection — hides dependencies, untestable without reflection
-@Service
-class BadService {
-    @Autowired
-    private lateinit var repository: UserRepository
-}
-
-// BAD: Setter injection — allows partially constructed objects
-@Service
-class AlsoBadService {
-    private var repository: UserRepository? = null
-
-    @Autowired
-    fun setRepository(repository: UserRepository) {
-        this.repository = repository
-    }
-}
-```
+- Single constructor does not need `@Autowired`
+- Use `@Qualifier` when multiple implementations exist
+- Avoid field injection (hides dependencies, untestable without reflection)
+- Avoid setter injection (allows partially constructed objects)
 
 ## Configuration Classes
 
-### Kotlin
+Use `@Configuration` classes to define beans programmatically with `@Bean` methods.
 
-```kotlin
-@Configuration
-class AppConfig {
+Key annotations:
 
-    @Bean
-    fun objectMapper(): ObjectMapper =
-        ObjectMapper()
-            .registerKotlinModule()
-            .registerModule(JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-
-    @Bean
-    fun restTemplate(builder: RestTemplateBuilder): RestTemplate =
-        builder
-            .connectTimeout(Duration.ofSeconds(5))
-            .readTimeout(Duration.ofSeconds(10))
-            .build()
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder(12)
-}
-```
-
-### Java
-
-```java
-@Configuration
-public class AppConfig {
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-    }
-
-    @Bean
-    public RestTemplate restTemplate(RestTemplateBuilder builder) {
-        return builder
-            .connectTimeout(Duration.ofSeconds(5))
-            .readTimeout(Duration.ofSeconds(10))
-            .build();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
-    }
-}
-```
+- `@Bean` — declares a bean
+- `@ConditionalOnMissingBean` — creates bean only if no other of same type exists
+- `@ConditionalOnClass` — creates bean only if class is on classpath
+- `@ConditionalOnProperty` — creates bean based on property value
 
 ## Properties and Configuration Binding
 
@@ -230,93 +79,17 @@ app:
 
 ### Type-Safe Configuration Properties
 
-#### Kotlin
-
-```kotlin
-@ConfigurationProperties(prefix = "app.payment")
-data class PaymentProperties(
-    val gatewayUrl: String,
-    val timeout: Duration = Duration.ofSeconds(5),
-    val retryAttempts: Int = 3
-)
-
-@ConfigurationProperties(prefix = "app.notification")
-data class NotificationProperties(
-    val enabled: Boolean = true,
-    val fromEmail: String
-)
-
-// Enable in main class or config
-@SpringBootApplication
-@ConfigurationPropertiesScan
-class Application
-```
-
-#### Java
-
-```java
-@ConfigurationProperties(prefix = "app.payment")
-public record PaymentProperties(
-    String gatewayUrl,
-    @DefaultValue("5s") Duration timeout,
-    @DefaultValue("3") int retryAttempts
-) {}
-
-@ConfigurationProperties(prefix = "app.notification")
-public record NotificationProperties(
-    @DefaultValue("true") boolean enabled,
-    String fromEmail
-) {}
-```
-
-### @Value for Simple Cases
-
-```kotlin
-@Service
-class FeatureFlagService(
-    @Value("\${app.feature.new-checkout:false}") private val newCheckoutEnabled: Boolean
-)
-```
+Use `@ConfigurationProperties` for structured, type-safe configuration binding. Enable scanning with `@ConfigurationPropertiesScan`.
 
 **Prefer @ConfigurationProperties over @Value** for anything beyond a single simple property.
 
 ## Profiles
 
-### Kotlin
+Profiles allow environment-specific configuration:
 
-```kotlin
-@Configuration
-@Profile("local")
-class LocalConfig {
-    @Bean
-    fun dataSource(): DataSource =
-        EmbeddedDatabaseBuilder()
-            .setType(EmbeddedDatabaseType.H2)
-            .build()
-}
-
-@Configuration
-@Profile("production")
-class ProductionConfig {
-    @Bean
-    fun dataSource(props: DataSourceProperties): DataSource =
-        HikariDataSource(HikariConfig().apply {
-            jdbcUrl = props.url
-            username = props.username
-            password = props.password
-            maximumPoolSize = 20
-        })
-}
-
-// Profile-specific beans
-@Service
-@Profile("!test")
-class RealPaymentGateway : PaymentGateway
-
-@Service
-@Profile("test")
-class MockPaymentGateway : PaymentGateway
-```
+- `@Profile("local")` / `@Profile("production")` on `@Configuration` or `@Bean`
+- `@Profile("!test")` — active when profile is NOT active
+- Profile-specific YAML: `application-{profile}.yml`
 
 ### Profile-Specific YAML
 
@@ -372,134 +145,17 @@ management:
 
 ### Custom Health Indicator
 
-#### Kotlin
-
-```kotlin
-@Component
-class PaymentGatewayHealthIndicator(
-    private val paymentClient: PaymentClient
-) : HealthIndicator {
-
-    override fun health(): Health =
-        try {
-            paymentClient.ping()
-            Health.up()
-                .withDetail("gateway", "reachable")
-                .build()
-        } catch (ex: Exception) {
-            Health.down()
-                .withDetail("gateway", "unreachable")
-                .withException(ex)
-                .build()
-        }
-}
-```
-
-#### Java
-
-```java
-@Component
-public class PaymentGatewayHealthIndicator implements HealthIndicator {
-
-    private final PaymentClient paymentClient;
-
-    public PaymentGatewayHealthIndicator(PaymentClient paymentClient) {
-        this.paymentClient = paymentClient;
-    }
-
-    @Override
-    public Health health() {
-        try {
-            paymentClient.ping();
-            return Health.up()
-                .withDetail("gateway", "reachable")
-                .build();
-        } catch (Exception ex) {
-            return Health.down()
-                .withDetail("gateway", "unreachable")
-                .withException(ex)
-                .build();
-        }
-    }
-}
-```
+Implement `HealthIndicator` interface to add custom health checks for external dependencies.
 
 ### Custom Metrics
 
-```kotlin
-@Service
-class OrderService(
-    private val meterRegistry: MeterRegistry,
-    private val orderRepository: OrderRepository
-) {
-    private val orderCounter = Counter.builder("orders.created")
-        .description("Number of orders created")
-        .register(meterRegistry)
-
-    fun createOrder(request: CreateOrderRequest): Order {
-        val order = orderRepository.save(request.toEntity())
-        orderCounter.increment()
-        return order
-    }
-}
-```
+Use `MeterRegistry` to define custom metrics (counters, gauges, timers, distribution summaries).
 
 ## Auto-Configuration
 
 ### Custom Auto-Configuration
 
-#### Kotlin
-
-```kotlin
-@AutoConfiguration
-@ConditionalOnClass(PaymentClient::class)
-@EnableConfigurationProperties(PaymentProperties::class)
-class PaymentAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun paymentClient(properties: PaymentProperties): PaymentClient =
-        DefaultPaymentClient(
-            baseUrl = properties.gatewayUrl,
-            timeout = properties.timeout
-        )
-
-    @Bean
-    @ConditionalOnProperty(prefix = "app.payment", name = ["retry-enabled"], havingValue = "true")
-    fun retryablePaymentClient(
-        delegate: PaymentClient,
-        properties: PaymentProperties
-    ): PaymentClient =
-        RetryablePaymentClient(delegate, properties.retryAttempts)
-}
-```
-
-#### Java
-
-```java
-@AutoConfiguration
-@ConditionalOnClass(PaymentClient.class)
-@EnableConfigurationProperties(PaymentProperties.class)
-public class PaymentAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public PaymentClient paymentClient(PaymentProperties properties) {
-        return new DefaultPaymentClient(
-            properties.gatewayUrl(),
-            properties.timeout()
-        );
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "app.payment", name = "retry-enabled", havingValue = "true")
-    public PaymentClient retryablePaymentClient(
-            PaymentClient delegate,
-            PaymentProperties properties) {
-        return new RetryablePaymentClient(delegate, properties.retryAttempts());
-    }
-}
-```
+Define auto-configuration classes with conditional annotations to provide default beans that users can override.
 
 ### Registration
 
