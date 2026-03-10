@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Gradle: Kotlin DSL, multi-module, version catalogs, convention plugins, build cache"
-globs: ["*.gradle.kts", "*.gradle", "settings.gradle.kts", "buildSrc/**/*", "build-logic/**/*"]
+globs: ["**/*.gradle.kts", "**/*.gradle", "buildSrc/**/*", "build-logic/**/*"]
 ---
 
 # Gradle Build System
@@ -76,8 +76,27 @@ tasks.test {
 ```
 
 - JaCoCo plugin for coverage reports and verification
-- Configure minimum coverage thresholds in convention plugins
 - Separate source sets for integration tests when needed
+
+### JaCoCo Coverage Enforcement
+
+```kotlin
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = BigDecimal("0.80")
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
+}
+```
+
+Run: `./gradlew test jacocoTestReport jacocoTestCoverageVerification`
 
 ## Dependency Configurations
 

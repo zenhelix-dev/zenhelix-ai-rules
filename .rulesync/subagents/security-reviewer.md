@@ -161,7 +161,7 @@ Scan for these patterns:
 
 ### Password Encoding
 
-- `BCryptPasswordEncoder` with strength >= 10 (default is acceptable)
+- `BCryptPasswordEncoder` with cost factor 12+ (OWASP recommendation)
 - NEVER `NoOpPasswordEncoder` or plain text storage
 - Ensure password encoder bean is properly configured
 

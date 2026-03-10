@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Java coding style: modern Java 17+, records, sealed classes, Optional, streams, naming"
-globs: ["*.java"]
+globs: ["**/*.java"]
 ---
 
 # Java Coding Style
@@ -113,5 +113,4 @@ User user = findById(id)
 - Use SLF4J for logging, never `System.out.println`
 - Annotation order: `@Override`, `@Nullable`/`@NotNull`, custom annotations, framework annotations
 - Prefer composition over inheritance
-- Keep methods short (< 50 lines), classes focused (< 800 lines)
 - Use `var` for local variables when the type is obvious from the right-hand side

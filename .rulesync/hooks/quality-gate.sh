@@ -13,6 +13,30 @@ case "$FILE_PATH" in
   *)          exit 0 ;;
 esac
 
+# --- Debounce: run every 15 edits, not on every write ---
+QUALITY_INTERVAL=15
+SESSION_ID="${CLAUDE_SESSION_ID:-$(echo "$PWD" | md5sum 2>/dev/null | cut -c1-8 || echo "$PWD" | shasum | cut -c1-8)}"
+COUNTER_FILE="/tmp/.claude-quality-gate-${SESSION_ID}-$(date +%Y%m%d)"
+
+LOCK_DIR="$COUNTER_FILE.lock"
+RUN_CHECK=false
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+  CURRENT="$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")"
+  COUNT=$((CURRENT + 1))
+  if [[ $((COUNT % QUALITY_INTERVAL)) -eq 0 ]]; then
+    RUN_CHECK=true
+  fi
+  echo "$COUNT" > "$COUNTER_FILE"
+  rmdir "$LOCK_DIR" 2>/dev/null
+  trap - EXIT
+fi
+
+if [[ "$RUN_CHECK" != "true" ]]; then
+  exit 0
+fi
+# --- End debounce ---
+
 find_gradlew() {
   local dir="$1"
   while [[ "$dir" != "/" ]]; do
@@ -69,16 +93,25 @@ fi
 
 TASKS=$("$GRADLEW_DIR/gradlew" "${GRADLE_OPTS[@]}" "${TASK_PREFIX}tasks" --all --quiet 2>/dev/null) || exit 0
 
+run_check() {
+  local task="$1"
+  local label="$2"
+  OUTPUT=$("$GRADLEW_DIR/gradlew" "${GRADLE_OPTS[@]}" "${TASK_PREFIX}${task}" 2>&1) || {
+    echo "QUALITY: ${label} found issues (edit #${COUNT}):" >&2
+    echo "$OUTPUT" | tail -20 >&2
+  }
+}
+
 if [[ "$FILE_TYPE" == "kotlin" ]]; then
   if echo "$TASKS" | grep -q "detektMain"; then
-    ("$GRADLEW_DIR/gradlew" "${GRADLE_OPTS[@]}" "${TASK_PREFIX}detektMain" --quiet 2>/dev/null) || true
+    run_check "detektMain" "detekt"
   fi
 elif [[ "$FILE_TYPE" == "java" ]]; then
   if echo "$TASKS" | grep -q "checkstyleMain"; then
-    ("$GRADLEW_DIR/gradlew" "${GRADLE_OPTS[@]}" "${TASK_PREFIX}checkstyleMain" --quiet 2>/dev/null) || true
+    run_check "checkstyleMain" "checkstyle"
   fi
   if echo "$TASKS" | grep -q "spotbugsMain"; then
-    ("$GRADLEW_DIR/gradlew" "${GRADLE_OPTS[@]}" "${TASK_PREFIX}spotbugsMain" --quiet 2>/dev/null) || true
+    run_check "spotbugsMain" "spotbugs"
   fi
 fi
 

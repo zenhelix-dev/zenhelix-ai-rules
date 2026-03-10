@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Java security: Spring Security, Bean Validation, parameterized queries, BCrypt, JWT, CORS"
-globs: ["*.java"]
+globs: ["**/*.java"]
 ---
 
 # Java Security
@@ -114,16 +114,4 @@ public CorsConfigurationSource corsConfigurationSource() {
 - Use Spring profiles for environment-specific configuration
 - Never commit `.env` files or `application-local.yml` with real secrets
 
-## Dependency Security
-
-- Use OWASP Dependency-Check Gradle plugin
-- Run dependency checks in CI pipeline
-- Update vulnerable dependencies promptly
-- Review transitive dependencies
-
-## Logging Security
-
-- Never log passwords, tokens, API keys, or PII
-- Use parameterized logging to prevent log injection
-- Sanitize user input before including in log messages
-- Log security events (failed logins, authorization failures)
+<!-- Dependency Security and Logging Security are in base security.md -->

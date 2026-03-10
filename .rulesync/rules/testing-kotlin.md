@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Kotlin testing: JUnit 5, MockK, coroutine testing, Kotest, coverage"
-globs: ["*.kt", "*.kts"]
+globs: ["**/*.kt", "**/*.kts"]
 ---
 
 # Kotlin Testing
@@ -124,24 +124,8 @@ companion object {
 
 ## Coverage Verification
 
+JaCoCo configuration is defined in `gradle.md`. Run:
+
 ```bash
-# Run tests with coverage
-./gradlew test jacocoTestReport
-
-# Verify minimum coverage
-./gradlew jacocoTestCoverageVerification
-```
-
-Configure minimum thresholds in the build script:
-
-```kotlin
-tasks.jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            limit {
-                minimum = BigDecimal("0.80")
-            }
-        }
-    }
-}
+./gradlew test jacocoTestReport jacocoTestCoverageVerification
 ```

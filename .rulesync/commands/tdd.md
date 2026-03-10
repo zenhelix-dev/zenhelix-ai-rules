@@ -100,3 +100,11 @@ Assistant: [invokes /tdd]
 ## Agent
 
 This command invokes the **tdd-guide** agent for workflow enforcement.
+
+### Language-Specific Agent Routing
+
+Determine the language from the file context (file extensions, build.gradle presence, project structure):
+
+- **Kotlin** (`.kt`, `.kts` files) → load **tdd-guide** (base methodology) + **tdd-guide-kotlin** (MockK, coroutines, Kotlin assertions)
+- **Java** (`.java` files) → load **tdd-guide** (base methodology) + **tdd-guide-java** (Mockito, MockMvc, AssertJ)
+- **Mixed or unclear** → load **tdd-guide** only, ask the user which language variant to use

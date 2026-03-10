@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Java testing: JUnit 5, Mockito, AssertJ, Spring Boot test slices, TestContainers, coverage"
-globs: ["*.java"]
+globs: ["**/*.java"]
 ---
 
 # Java Testing
@@ -140,22 +140,8 @@ class TestUsers {
 
 ## Coverage Enforcement
 
-Configure JaCoCo in Gradle:
+JaCoCo configuration is defined in `gradle.md`. Run:
 
-```kotlin
-tasks.jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            limit {
-                minimum = BigDecimal("0.80")
-            }
-        }
-    }
-}
-
-tasks.check {
-    dependsOn(tasks.jacocoTestCoverageVerification)
-}
+```bash
+./gradlew test jacocoTestReport jacocoTestCoverageVerification
 ```
-
-Run: `./gradlew test jacocoTestReport jacocoTestCoverageVerification`

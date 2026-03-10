@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Kotlin patterns: Result type, sealed state machines, delegation, DSL builders, Flow, coroutines"
-globs: ["*.kt", "*.kts"]
+globs: ["**/*.kt", "**/*.kts"]
 ---
 
 # Kotlin Patterns
@@ -102,10 +102,14 @@ fun eventFlow(): Flow<Event> = callbackFlow {
     awaitClose { unregister(listener) }
 }
 
-// Share a cold Flow as hot StateFlow
-val state: StateFlow<UiState> = repository.observe()
-    .map { data -> UiState.Loaded(data) }
-    .stateIn(scope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
+// Event bus with SharedFlow
+private val _events = MutableSharedFlow<DomainEvent>(extraBufferCapacity = 64)
+val events: SharedFlow<DomainEvent> = _events.asSharedFlow()
+
+// Reactive data pipeline
+fun streamUpdates(): Flow<Update> = repository.observe()
+    .map { entity -> entity.toUpdate() }
+    .catch { e -> logger.error("Stream failed", e); emit(Update.empty()) }
 ```
 
 ## Coroutine Patterns

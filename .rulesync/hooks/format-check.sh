@@ -12,6 +12,30 @@ case "$FILE_PATH" in
   *) exit 0 ;;
 esac
 
+# --- Debounce: run every 5 edits ---
+FORMAT_INTERVAL=5
+SESSION_ID="${CLAUDE_SESSION_ID:-$(echo "$PWD" | md5sum 2>/dev/null | cut -c1-8 || echo "$PWD" | shasum | cut -c1-8)}"
+COUNTER_FILE="/tmp/.claude-format-check-${SESSION_ID}-$(date +%Y%m%d)"
+
+LOCK_DIR="$COUNTER_FILE.lock"
+RUN_FORMAT=false
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+  CURRENT="$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")"
+  COUNT=$((CURRENT + 1))
+  if [[ $((COUNT % FORMAT_INTERVAL)) -eq 0 ]]; then
+    RUN_FORMAT=true
+  fi
+  echo "$COUNT" > "$COUNTER_FILE"
+  rmdir "$LOCK_DIR" 2>/dev/null
+  trap - EXIT
+fi
+
+if [[ "$RUN_FORMAT" != "true" ]]; then
+  exit 0
+fi
+# --- End debounce ---
+
 find_gradlew() {
   local dir="$1"
   while [[ "$dir" != "/" ]]; do

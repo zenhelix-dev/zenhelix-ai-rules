@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Kotlin coding style: immutability, null safety, coroutines, scope functions, idiomatic patterns"
-globs: ["*.kt", "*.kts"]
+globs: ["**/*.kt", "**/*.kts"]
 ---
 
 # Kotlin Coding Style

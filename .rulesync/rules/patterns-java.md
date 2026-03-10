@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Java patterns: repository with JPA, service layer, DTO mapping, builder, strategy, exception hierarchy"
-globs: ["*.java"]
+globs: ["**/*.java"]
 ---
 
 # Java Patterns

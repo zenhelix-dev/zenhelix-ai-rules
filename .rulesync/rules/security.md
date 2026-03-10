@@ -15,7 +15,7 @@ Before ANY commit, verify:
 - [ ] All user inputs validated and sanitized
 - [ ] SQL injection prevention (parameterized queries only)
 - [ ] XSS prevention (sanitized HTML output, proper encoding)
-- [ ] CSRF protection enabled on state-changing endpoints
+- [ ] CSRF protection enabled on state-changing endpoints (disable only for stateless/JWT-based APIs)
 - [ ] Authentication and authorization verified on all protected resources
 - [ ] Rate limiting configured on all public endpoints
 - [ ] Error messages do not leak sensitive data (stack traces, internal paths, DB schemas)
@@ -38,6 +38,20 @@ Before ANY commit, verify:
 - Security Misconfiguration: disable debug in production, remove defaults
 - Insecure Deserialization: validate and restrict deserialized types
 - Logging & Monitoring: log security events, never log secrets
+
+## Dependency Security
+
+- Use OWASP Dependency-Check Gradle plugin to scan for known vulnerabilities
+- Run dependency checks in CI pipeline
+- Update vulnerable dependencies promptly
+- Review transitive dependencies periodically
+
+## Logging Security
+
+- Never log sensitive data: passwords, tokens, API keys, PII, credit card numbers
+- Use parameterized logging to prevent log injection
+- Sanitize user input before including in log messages
+- Log security events (failed logins, authorization failures)
 
 ## Security Response Protocol
 

@@ -2,7 +2,8 @@
 
 INPUT=$(cat 2>/dev/null || true)
 
-COUNTER_FILE="/tmp/.claude-tool-calls-${PPID}-$(date +%Y%m%d)"
+SESSION_ID="${CLAUDE_SESSION_ID:-$(echo "$PWD" | md5sum 2>/dev/null | cut -c1-8 || echo "$PWD" | shasum | cut -c1-8)}"
+COUNTER_FILE="/tmp/.claude-tool-calls-${SESSION_ID}-$(date +%Y%m%d)"
 
 LOCK_DIR="$COUNTER_FILE.lock"
 

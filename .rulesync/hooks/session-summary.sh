@@ -5,11 +5,13 @@
   echo ""
 
   echo "--- Unstaged changes ---"
-  git diff --stat 2>/dev/null || echo "(no unstaged changes)"
+  UNSTAGED=$(git diff --stat 2>/dev/null)
+  echo "${UNSTAGED:-(no unstaged changes)}"
   echo ""
 
   echo "--- Staged changes ---"
-  git diff --cached --stat 2>/dev/null || echo "(no staged changes)"
+  STAGED=$(git diff --cached --stat 2>/dev/null)
+  echo "${STAGED:-(no staged changes)}"
   echo ""
 
   echo "--- Overall ---"

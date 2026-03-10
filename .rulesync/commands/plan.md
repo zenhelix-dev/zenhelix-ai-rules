@@ -50,6 +50,7 @@ upon before any changes are made to the codebase.
 
 - Output the full plan in a structured format
 - Highlight any risks or trade-offs
+- Create TodoWrite entries for each phase (subject: phase name, description: files + acceptance criteria)
 - WAIT for the user to type CONFIRM or provide feedback
 - Do NOT proceed to implementation until explicit confirmation
 

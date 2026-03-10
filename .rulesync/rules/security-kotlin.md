@@ -2,7 +2,7 @@
 root: false
 targets: ["claudecode"]
 description: "Kotlin security: input validation, null safety as security, serialization, coroutine safety"
-globs: ["*.kt", "*.kts"]
+globs: ["**/*.kt", "**/*.kts"]
 ---
 
 # Kotlin Security
@@ -23,10 +23,10 @@ fun createUser(email: String, age: Int): User {
 
 ## Parameterized Queries
 
-- JDBC: use `PreparedStatement` with `?` placeholders, never string concatenation
-- JPA: use `@Param` named parameters in `@Query` annotations
-- Exposed DSL: use the type-safe query builder
-- jOOQ: use the type-safe DSL (inherently safe from injection)
+- Always use parameterized queries or type-safe query builders — never string concatenation
+- JDBC: `PreparedStatement` with `?` placeholders
+- JPA/Spring Data: `@Param` named parameters in `@Query`
+- Type-safe DSLs (jOOQ, etc.): inherently safe from injection, prefer over raw SQL
 
 ```kotlin
 // WRONG
@@ -94,14 +94,4 @@ data class UserRequest(
 }
 ```
 
-## Dependency Security
-
-- Use OWASP Dependency-Check Gradle plugin to scan for known vulnerabilities
-- Review transitive dependencies periodically
-- Keep dependencies up to date, especially security-related libraries
-
-## Logging Security
-
-- Never log sensitive data: passwords, tokens, PII, credit card numbers
-- Use parameterized logging to prevent log injection
-- Sanitize user input before including it in log messages
+<!-- Dependency Security and Logging Security are in base security.md -->
